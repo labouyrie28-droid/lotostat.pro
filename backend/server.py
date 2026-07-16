@@ -537,21 +537,21 @@ async def generate_grid(payload: GenerateGridRequest, user: User = Depends(get_c
             weights_main = {n: (max_m - main_freq.get(n, 0) + 1) ** 2 for n in range(1, 50)}
             weights_chance = {n: (max_c - chance_freq.get(n, 0) + 1) ** 2 for n in range(1, 11)}
         elif payload.strategy == "balanced":
-            # Mix: 2 hot, 2 cold, 1 highest delay
+            # Mix: 2 chauds + 2 froids + 1 en retard, avec variation via sampling
             ranked_hot = sorted(range(1, 50), key=lambda n: main_freq.get(n, 0), reverse=True)
             ranked_cold = sorted(range(1, 50), key=lambda n: main_freq.get(n, 0))
             ranked_delay = sorted(range(1, 50), key=lambda n: delays[n], reverse=True)
             picked = set()
-            for n in ranked_hot:
-                if len(picked) >= 2: break
-                picked.add(n)
-            for n in ranked_cold:
-                if len(picked) >= 4: break
-                picked.add(n)
-            for n in ranked_delay:
-                if len(picked) >= 5: break
-                picked.add(n)
-            # fill if any collision
+            # 2 from top-8 hot
+            hot_pool = [n for n in ranked_hot[:8] if n not in picked]
+            picked.update(random.sample(hot_pool, min(2, len(hot_pool))))
+            # 2 from top-8 cold
+            cold_pool = [n for n in ranked_cold[:8] if n not in picked]
+            picked.update(random.sample(cold_pool, min(2, len(cold_pool))))
+            # 1 from top-5 delay
+            delay_pool = [n for n in ranked_delay[:5] if n not in picked]
+            if delay_pool:
+                picked.add(random.choice(delay_pool))
             while len(picked) < 5:
                 picked.add(random.randint(1, 49))
             weights_main = None
@@ -683,15 +683,13 @@ def _generate_grids_from_history(history: List[dict], strategy: str, n_grids: in
             rc = sorted(range(1, 50), key=lambda n: main_freq.get(n, 0))
             rd = sorted(range(1, 50), key=lambda n: delays[n], reverse=True)
             picked = set()
-            for n in rh:
-                if len(picked) >= 2: break
-                picked.add(n)
-            for n in rc:
-                if len(picked) >= 4: break
-                picked.add(n)
-            for n in rd:
-                if len(picked) >= 5: break
-                picked.add(n)
+            hot_pool = [n for n in rh[:8] if n not in picked]
+            picked.update(random.sample(hot_pool, min(2, len(hot_pool))))
+            cold_pool = [n for n in rc[:8] if n not in picked]
+            picked.update(random.sample(cold_pool, min(2, len(cold_pool))))
+            delay_pool = [n for n in rd[:5] if n not in picked]
+            if delay_pool:
+                picked.add(random.choice(delay_pool))
             while len(picked) < 5:
                 picked.add(random.randint(1, 49))
             nums = sorted(picked)

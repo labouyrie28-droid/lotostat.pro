@@ -3,42 +3,34 @@
 ## Problem Statement (verbatim)
 > Je voudrais créer une application qui puisse analyser les statistiques des tirages loto sur les trois dernières années et proposer en fonction des tirages...
 
-## Context
-- Utilisateur a fourni une v0.7 précédente (LotoAI-Pro) construite avec ChatGPT puis Claude en stack Streamlit + SQLite.
-- On repart sur une architecture moderne React + FastAPI + MongoDB tout en récupérant les concepts forts de la v0.7.
-
-## User Personas
-- **Joueur curieux** : veut visualiser des stats sur les tirages et générer des grilles.
-- **Analyste amateur** : veut importer ses propres CSV, comparer tendances récentes vs global, tester des stratégies.
+## Context & Data
+- User uploaded LotoAI-Pro v0.7 (Streamlit+SQLite) for comparison.
+- User uploaded real FDJ CSV (loto_201911.csv) with **1048 draws from Nov 2019 to July 2026**.
+- Migrated to modern stack: React + FastAPI + MongoDB, keeping v0.7 statistical concepts.
 
 ## Architecture
-- Frontend : React 19 + Tailwind + shadcn/ui + Recharts + Framer/motion, thème dark premium.
-- Backend : FastAPI + Motor (MongoDB async), auth Google via Emergent Auth (cookie httpOnly + Bearer fallback).
-- Storage : MongoDB collections `users`, `user_sessions`, `draws`, `saved_grids`.
+- Frontend: React 19 + Tailwind + shadcn/ui + Recharts, dark premium theme (Outfit/IBM Plex/JetBrains Mono).
+- Backend: FastAPI + Motor (MongoDB async), Emergent Google Auth, APScheduler for daily cron.
+- Email: Resend (labouyrie28@gmail.com account, test mode limits recipients).
+- Storage: MongoDB collections `users`, `user_sessions`, `draws`, `saved_grids`, `alert_prefs`.
 
-## Core Requirements
-- Loto FDJ (5 numéros 1-49 + 1 chance 1-10)
-- Auth Google Emergent
-- Multi-utilisateur (données isolées par user_id)
-- Import CSV format v0.7 (`date,n1..n5,chance`)
-- Génération 3 ans de données de démo réalistes
-- Analyses : fréquence, chauds/froids, retards, paires, triplets, somme, parité, écarts, tendance récent-vs-global (v0.7)
-- Générateur 4 stratégies : chauds, froids, équilibrée, aléatoire pondérée
-- Sauvegarde de grilles par utilisateur
+## Implemented
+### Iteration 1 — MVP (2026-02-XX)
+- Landing + Google Auth Emergent + AuthCallback
+- 7 dashboard views: Overview, History, Stats, HotCold, Generator, MyGrids, DataImport
+- Backend endpoints: auth, draws (list/import/demo/clear), stats (frequency/hot-cold/pairs/sum-parity/trend), grids (generate/save/list/delete), csv-template
+- CSV importer auto-detects FDJ official format (`;` separator, `date_de_tirage;boule_1..5;numero_chance`) and v0.7 template (`date,n1..5,chance`)
+- Bug fix: save_grid ObjectId serialization (pop _id after insert)
 
-## Implemented (2026-02-XX)
-- Landing page + auth Google Emergent + AuthCallback
-- Dashboard avec sidebar 7 vues : Overview, Historique, Statistiques, Chauds/Froids, Générateur, Mes grilles, Données
-- Backend endpoints : auth, draws (list/import/demo/clear), stats (frequency/hot-cold/pairs/sum-parity/trend), grids (generate/save/list/delete), csv-template
-- TrendIndicator (récent vs global) importé du v0.7 avec seuil de fiabilité
-- % d'apparition sur paires/triplets (héritage v0.7)
-- Avertissement statistique visible (loto = jeu indépendant)
-- Bug fix : save_grid renvoyait _id ObjectId → corrigé
+### Iteration 2 — Backtest + Heatmap + Alerts (2026-02-XX)
+- **Backtest** (`/api/backtest`): walk-forward comparison of 5 strategies (hot/cold/balanced/weighted_random/random) with avg matches, hit ≥3 rate, chance hit rate, rank distribution
+- **Heatmap** (`/api/stats/heatmap`): 49x49 pair co-occurrence matrix with sky→amber→red gradient
+- **Alerts** (`/api/alerts/*`): user prefs (email/strategy/grids_count/enabled), manual send, APScheduler daily cron at 12:00 Paris that fires on Mon/Wed/Sat (Loto draw days)
+- Balanced strategy: added random sampling from top-8 pools to avoid deterministic identical grids
 
-## Backlog / Not implemented
-- **P1** Vérification pas-à-pas d'une grille contre l'historique (a-t-elle été gagnante ?)
-- **P1** Comparaison de plusieurs stratégies (backtesting sur historique)
-- **P2** Heatmap visuelle des paires (grille 49×49)
-- **P2** Export des grilles en PDF / partage
-- **P2** Import FDJ direct depuis fdj.fr (fragile — abandonné dans la v0.7 aussi)
-- **P2** Notifications par email lors d'un tirage réel
+## Backlog
+- **P1** Verify a played grid against full history (was it ever a winner?)
+- **P2** Verify Resend domain to send to any email (currently test mode restricts to account owner)
+- **P2** Estimated payout per strategy in backtest (2 nums = 2.20€, 3=10€, 4=800€, 5=100k€, 5+chance = jackpot)
+- **P2** Compare user's saved grid to next actual draw
+- **P2** Timeline chart: number streaks over time
