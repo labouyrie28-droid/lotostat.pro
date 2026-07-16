@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 9 — Système Réducteur (Wheel / Covering Design). Backend endpoint /api/grids/wheel and frontend /dashboard/wheel fully validated. All 12 pytest tests pass (100%). Mathematical coverage guarantee verified by exhaustively checking every C(K,t) subset of the pool is contained in at least one returned ticket. Frontend page renders correctly with all controls (pool size 6-12, target 3/4/5, hot/cold/delay presets, 49-number grid, chance 1-10, compute button) and integrates cleanly with backend — probability metrics displayed exactly match spec (2.562% / 0.508% / ×5.05 for K=8, t=3). New sidebar entry present.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter9_wheel.py",
+    "/app/test_reports/pytest/iter9.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1492 lines — approaching maintainability limits; consider splitting into modules (auth.py, draws.py, stats.py, grids.py, alerts.py) in a future refactor.",
+    "Greedy set-cover in /grids/wheel enumerates all C(K,5) candidates and recomputes C(5,t) subsets per iteration inside a Python loop — O(C(K,5)^2 * C(5,t)). Fine for K<=12 (~792 candidates) but should stay bounded (current validation caps K=12).",
+    "In WheelRequest, pydantic doesn't enforce list length or bounds — validation is done manually in the handler. Consider Field(min_items=6, max_items=12) and Literal[3,4,5] for target_matches for cleaner 422 responses (currently returns 400 via HTTPException, which still works).",
+    "Wheel.jsx: chance number defaults to 7 (hardcoded); consider defaulting to null or last-seen preference."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Session token test_session_wheel_1784202905 injected via mongosh script (user_id=test_fdj_wheel_1784202905) with 1048 official FDJ draws pre-loaded.",
+  "seed_data_creation": "Inserted 1 test user + 1 session + 1048 draws from /app/backend/data/loto_fdj_official.csv.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Wheel/Système Réducteur endpoint /api/grids/wheel is stable. Reuse test file /app/backend/tests/test_iter9_wheel.py for regression. Coverage guarantee verified for K=8/t=3 and K=10/t=3 (every t-subset covered). Greedy returns 9 tickets for K=8 (theoretical optimum 8) and 19 for K=10 (optimum 17) — within expected greedy overhead.",
+  "rca of the issue": "N/A — feature works end-to-end. Metrics match analytical values: for K=8, t=3: p_pool_covers = sum(C(8,k)*C(41,5-k), k=3..5)/C(49,5) ≈ 2.562%; p_single = sum(C(5,k)*C(44,5-k), k=3..5)/C(49,5) ≈ 0.508%; ratio ≈ 5.04."
+}

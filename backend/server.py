@@ -756,6 +756,95 @@ async def generate_grid(payload: GenerateGridRequest, user: User = Depends(get_c
     return {"grids": grids}
 
 
+# --------- Wheel / Système Réducteur ---------
+
+class WheelRequest(BaseModel):
+    numbers: List[int]  # pool of K numbers (6..12)
+    target_matches: int = 3  # 3, 4 or 5
+    chance: Optional[int] = None  # optional single chance number for all tickets
+
+
+@api_router.post("/grids/wheel")
+async def wheel_system(payload: WheelRequest, user: User = Depends(get_current_user)):
+    """
+    Système Réducteur (Covering Design).
+    Génère la couverture minimale : si au moins `target_matches` des 5 numéros tirés
+    sont dans le pool de K numéros, alors au moins une des grilles retournées est
+    GARANTIE d'avoir target_matches+ bons numéros.
+    Algorithme : greedy set-cover (approximation ~ln(n) du minimum optimal).
+    Références : Steiner (1853), Erdős, La Jolla Covering Repository.
+    """
+    from itertools import combinations
+    from math import comb
+
+    pool = sorted(set(payload.numbers))
+    K = len(pool)
+    t = payload.target_matches
+
+    if K != len(payload.numbers):
+        raise HTTPException(400, "Les numéros du pool doivent être uniques")
+    if K < 6 or K > 12:
+        raise HTTPException(400, "Le pool doit contenir entre 6 et 12 numéros")
+    if t not in (3, 4, 5):
+        raise HTTPException(400, "target_matches doit être 3, 4 ou 5")
+    if t > K:
+        raise HTTPException(400, "target_matches ne peut pas dépasser la taille du pool")
+    if any(n < 1 or n > 49 for n in pool):
+        raise HTTPException(400, "Les numéros doivent être entre 1 et 49")
+    if payload.chance is not None and not (1 <= payload.chance <= 10):
+        raise HTTPException(400, "Chance entre 1 et 10")
+
+    # All t-subsets of the pool that we need to cover
+    to_cover = set(combinations(pool, t))
+    # Candidate tickets : all 5-subsets of the pool
+    candidates = list(combinations(pool, 5))
+
+    selected = []
+    uncovered = set(to_cover)
+    max_iterations = len(candidates)  # safety bound
+    while uncovered and max_iterations > 0:
+        max_iterations -= 1
+        # Greedy pick: ticket covering the most uncovered t-subsets
+        best_ticket = None
+        best_cover = frozenset()
+        for c in candidates:
+            covered_by_c = frozenset(combinations(c, t)) & uncovered
+            if len(covered_by_c) > len(best_cover):
+                best_cover = covered_by_c
+                best_ticket = c
+        if best_ticket is None:
+            break
+        selected.append(list(best_ticket))
+        uncovered -= best_cover
+
+    # Attach chance number
+    chance_num = payload.chance if payload.chance is not None else random.randint(1, 10)
+    tickets = [{"numbers": list(t), "chance": chance_num} for t in selected]
+
+    # Probability that at least `t` of the drawn 5 fall inside our pool of K
+    p_pool_has_t_plus = sum(
+        comb(K, k) * comb(49 - K, 5 - k) for k in range(t, 6)
+    ) / comb(49, 5)
+
+    # Also: baseline probability of a single random ticket getting t+ matches
+    p_single_random_tplus = sum(
+        comb(5, k) * comb(44, 5 - k) for k in range(t, 6)
+    ) / comb(49, 5)
+
+    return {
+        "pool": pool,
+        "pool_size": K,
+        "target_matches": t,
+        "tickets": tickets,
+        "tickets_count": len(tickets),
+        "cost_euros": round(len(tickets) * FDJ_GRID_COST, 2),
+        "chance": chance_num,
+        "p_pool_covers_pct": round(p_pool_has_t_plus * 100, 3),
+        "p_single_random_pct": round(p_single_random_tplus * 100, 3),
+        "improvement_factor": round(p_pool_has_t_plus / p_single_random_tplus, 2) if p_single_random_tplus > 0 else 0,
+    }
+
+
 @api_router.post("/grids/save")
 async def save_grid(payload: SaveGridRequest, user: User = Depends(get_current_user)):
     if not _valid_draw(payload.numbers, payload.chance):
