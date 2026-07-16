@@ -13,6 +13,9 @@ import HotCold from "@/pages/views/HotCold";
 import Generator from "@/pages/views/Generator";
 import MyGrids from "@/pages/views/MyGrids";
 import DataImport from "@/pages/views/DataImport";
+import Backtest from "@/pages/views/Backtest";
+import Heatmap from "@/pages/views/Heatmap";
+import Alerts from "@/pages/views/Alerts";
 
 const AppRoutes = () => {
   const location = useLocation();
@@ -28,8 +31,11 @@ const AppRoutes = () => {
         <Route path="history" element={<History />} />
         <Route path="stats" element={<Stats />} />
         <Route path="hot-cold" element={<HotCold />} />
+        <Route path="heatmap" element={<Heatmap />} />
         <Route path="generator" element={<Generator />} />
+        <Route path="backtest" element={<Backtest />} />
         <Route path="grids" element={<MyGrids />} />
+        <Route path="alerts" element={<Alerts />} />
         <Route path="import" element={<DataImport />} />
       </Route>
     </Routes>

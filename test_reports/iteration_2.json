@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 2 focused testing of the 3 new features: Backtesting, Heatmap, Alerts. Backend: 9/9 pytest cases pass. Frontend: all 3 new pages render correctly with expected data-testids, integrations, and disabled states. Grid save 500 bug from iteration 1 is confirmed fixed (regression: save/list/delete verified via UI in previous iter, backend method now pops _id). No new bugs found.",
+  "tested_scope": ["backend", "frontend", "integration"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "passed": [
+    "POST /api/draws/import-csv with FDJ format (semicolon separator, date_de_tirage;boule_1..5;numero_chance, DD/MM/YYYY) auto-detected: format_detected='FDJ', inserted=60, errors=0",
+    "GET /api/stats/heatmap: total_draws, max, pairs list with exactly 1176 items (C(49,2)); every pair has a<b and count>=0",
+    "POST /api/backtest {grids_per_strategy:10, sample_size:30}: returns 5 strategies (hot, cold, balanced, weighted_random, random), each with rank_distribution length 6, chance_hit_rate, hit_3plus_rate, hits_5plus_chance; sorted by avg_main_matches desc",
+    "POST /api/backtest {sample_size:9999}: clamps sample_size to <= total_draws (no error)",
+    "POST /api/backtest with 60 draws succeeds (>=30 threshold respected)",
+    "GET /api/alerts/next-draw: returns next_draw_date ISO, day_name in French, resend_configured boolean (false)",
+    "GET /api/alerts/prefs (fresh user): returns defaults {enabled:false, strategy:'balanced', grids_count:3, email:user.email}",
+    "POST /api/alerts/prefs {enabled:true, strategy:'hot', grids_count:5, email:'x@y.z'} persists; subsequent GET returns saved values",
+    "POST /api/alerts/send returns 503 with 'Service email non configuré' detail (RESEND_API_KEY empty) — EXPECTED behavior, not a bug",
+    "Frontend Sidebar: 10 nav items (Vue d'ensemble, Historique, Statistiques, Chauds/Froids, Heatmap, Générateur, Backtest, Mes grilles, Alertes email, Données)",
+    "Frontend /dashboard/heatmap: 49x49 grid (2401 cells), hover populates data-testid='heatmap-hover-info', gradient scale legend present",
+    "Frontend /dashboard/backtest: 2 sliders (grids-per-strategy, sample-size), 'Lancer le backtest' button POSTs /api/backtest and renders 5 strategy-result-* cards; Trophy icon on winner (#1)",
+    "Frontend /dashboard/alerts: next-draw-date populated (samedi 2026-07-18), 'Service email non configuré' banner shows, Switch has disabled attribute set, send-now-btn is disabled",
+    "Frontend Alerts: changing strategy (alert-strategy-hot) and count (alert-count-5) triggers POST /api/alerts/prefs and shows toast 'Préférences enregistrées'"
+  ],
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/iter2.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backtest chart briefly emits recharts width=-1/height=-1 warnings during initial mount because the results Card animates in; harmless but could be avoided by ensuring ResponsiveContainer parent has explicit min-height. Not blocking.",
+    "server.py is now ~1000 lines — consider splitting into modules (auth, draws, stats, backtest, alerts) for maintainability.",
+    "In /api/alerts/send, the resend.Emails.send is wrapped in asyncio.to_thread with exception → 500; consider narrowing to more specific error codes (429 rate limit, 422 invalid recipient) if needed later.",
+    "logger is defined AFTER _run_daily_alerts references it at module scope — currently fine because it's only invoked at runtime, but consider moving logging.basicConfig/getLogger to the top of the file to avoid future NameError risk."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% of tested flows"},
+  "test_credentials": "Ephemeral session_token in mongo: test_session_1784197347394 (user test.fdj@example.com). Injected via mongosh per /app/auth_testing.md.",
+  "seed_data_creation": "60 draws seeded via /api/draws/import-csv with an in-memory FDJ-format CSV (semicolon, DD/MM/YYYY). Alert prefs also created for the test user (enabled=true, strategy=hot, grids_count=5, email='x@y.z').",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 3 new features (Heatmap, Backtest, Alerts) are fully working end-to-end. The test user retains 60 seeded draws and alert prefs. RESEND_API_KEY is intentionally empty — send returns 503 correctly. If a Resend key is added later, re-test /alerts/send should return 200 with a Resend email_id. backend_test.py is generic (uses TEST_TOKEN env var) and reusable for regressions."
+}

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import {
-  LayoutDashboard, History, BarChart3, Flame, Sparkles, Bookmark, Upload, LogOut, Sparkle,
+  LayoutDashboard, History, BarChart3, Flame, Grid3X3, Sparkles, TrendingUp, Bookmark, Bell, Upload, LogOut, Sparkle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -13,8 +13,11 @@ const navItems = [
   { to: "/dashboard/history", icon: History, label: "Historique" },
   { to: "/dashboard/stats", icon: BarChart3, label: "Statistiques" },
   { to: "/dashboard/hot-cold", icon: Flame, label: "Chauds / Froids" },
+  { to: "/dashboard/heatmap", icon: Grid3X3, label: "Heatmap" },
   { to: "/dashboard/generator", icon: Sparkles, label: "Générateur" },
+  { to: "/dashboard/backtest", icon: TrendingUp, label: "Backtest" },
   { to: "/dashboard/grids", icon: Bookmark, label: "Mes grilles" },
+  { to: "/dashboard/alerts", icon: Bell, label: "Alertes email" },
   { to: "/dashboard/import", icon: Upload, label: "Données" },
 ];
 
