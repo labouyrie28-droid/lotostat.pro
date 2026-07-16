@@ -1,0 +1,42 @@
+{
+  "summary": "First-finish smoke pass on LotoStat Pro (React + FastAPI + MongoDB). Backend: 14/15 checks pass; Frontend: landing + dashboard + 5/6 sidebar views + demo generation + grid generation + Stats charts/slider/pairs verified. One HIGH bug found: POST /api/grids/save returns 500 due to Mongo ObjectId not JSON-serializable (insert_one mutates the returned doc). Frontend surfaces the failure with toast 'Impossible de sauvegarder'.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "GET /api/ health 200",
+    "GET /api/auth/me: 401 without token, 200 with Bearer token",
+    "Auth-gating: /api/draws, /api/grids, /api/stats/* all return 401 without token",
+    "POST /api/draws/generate-demo inserted 470 draws (>400)",
+    "GET /api/draws returns valid draws (5 unique nums 1-49, chance 1-10)",
+    "GET /api/stats/frequency: total=470, main=49, chance=10",
+    "GET /api/stats/hot-cold: hot=10, cold=10, top_delays=10, all_delays=49",
+    "GET /api/stats/pairs: correct keys (a,b,count,percent) and (a,b,c,count,percent)",
+    "GET /api/stats/sum-parity: sum_min/max/avg + parity_distribution=6 + gap_distribution present",
+    "GET /api/stats/trend?window=20: fenetre=20, seuil=15, fiable=true, hausse=10, baisse=10",
+    "POST /api/grids/generate for all 4 strategies (hot, cold, balanced, weighted_random) returns valid grids",
+    "GET /api/grids and DELETE /api/grids/{id} work (list count updated correctly)",
+    "GET /api/draws/csv-template returns proper CSV with header 'date,n1,n2,n3,n4,n5,chance'",
+    "POST /api/draws/import-csv: inserted=3, errors=0 for 3-row CSV",
+    "DELETE /api/draws clears user draws (deleted=473)",
+    "Frontend Landing: 'Se connecter' + 'Commencer avec Google' buttons render",
+    "Frontend Dashboard renders with 7 sidebar items and Test User profile after session_token cookie injection",
+    "Overview: 'Générer 3 ans de démo' triggers demo generation, stat-total-draws=470, dernier tirage card shows 5 balls + 1 chance ball",
+    "Générateur: 4 strategy cards, 'balanced' selection + Générer produces generated-grid-0",
+    "Statistiques page: chart-frequency-main, trend-window-slider, pairs-list all visible",
+    "Mes grilles + Données pages load with template link and csv-file-input"
+  ],
+  "failed": [
+    {
+      "area": "Backend /api/grids/save",
+      "issue": "Returns 500 Internal Server Error. Mongo insert_one mutates the doc in-place adding ObjectId _id; the endpoint returns that doc, and FastAPI/pydantic serialization fails with: ValueError: [TypeError(\"'ObjectId' object is not iterable\"), TypeError('vars() argument must have __dict__ attribute')]. The grid IS actually inserted into the DB (list_grids uses {_id:0} projection and shows it), but the client sees an error toast.",
+      "evidence": "Backend log traceback in /var/log/supervisor/backend.err.log; curl response 'Internal Server Error'; frontend toast 'Impossible de sauvegarder'; console 500.",
+      "priority": "HIGH"
+    }
+  ],
+  "action_items": [
+    "Fix /api/grids/save in /app/backend/server.py: after `await db.saved_grids.insert_one(doc)`, either `doc.pop('_id', None)` before return, or build a response dict without _id. Same defensive pattern is already used elsewhere via {_id: 0} projection."
+  ],
+  "success_rate": {"backend": "94%", "frontend": "100% of visited views"},
+  "retest_needed": true,
+  "full_testing_deferred": true,
+  "notes": "HotCold and History nav clicks were not exercised due to my wrong data-testid selector (real testids: nav-chauds---froids, nav-historique — triple-dash from label 'Chauds / Froids'). Not an app bug; can be covered in full pass. All other pages loaded and their key data-testids resolved."
+}

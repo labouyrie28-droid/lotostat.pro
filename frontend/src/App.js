@@ -1,54 +1,56 @@
-import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { AuthProvider } from "@/context/AuthContext";
+import { Toaster } from "@/components/ui/sonner";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import Landing from "@/pages/Landing";
+import AuthCallback from "@/pages/AuthCallback";
+import Dashboard from "@/pages/Dashboard";
+import Overview from "@/pages/views/Overview";
+import History from "@/pages/views/History";
+import Stats from "@/pages/views/Stats";
+import HotCold from "@/pages/views/HotCold";
+import Generator from "@/pages/views/Generator";
+import MyGrids from "@/pages/views/MyGrids";
+import DataImport from "@/pages/views/DataImport";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
+const AppRoutes = () => {
+  const location = useLocation();
+  // Synchronous check: catch OAuth callback before any other route
+  if (location.hash?.includes("session_id=")) {
+    return <AuthCallback />;
+  }
   return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/dashboard" element={<Dashboard />}>
+        <Route index element={<Overview />} />
+        <Route path="history" element={<History />} />
+        <Route path="stats" element={<Stats />} />
+        <Route path="hot-cold" element={<HotCold />} />
+        <Route path="generator" element={<Generator />} />
+        <Route path="grids" element={<MyGrids />} />
+        <Route path="import" element={<DataImport />} />
+      </Route>
+    </Routes>
   );
 };
 
 function App() {
   return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+    <div className="App dark">
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+          <Toaster
+            theme="dark"
+            position="top-right"
+            toastOptions={{
+              className: "!bg-[#0d0d10] !border-white/10 !text-white",
+            }}
+          />
+        </BrowserRouter>
+      </AuthProvider>
     </div>
   );
 }
