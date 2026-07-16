@@ -589,7 +589,106 @@ async def save_grid(payload: SaveGridRequest, user: User = Depends(get_current_u
 @api_router.get("/grids")
 async def list_grids(user: User = Depends(get_current_user)):
     cursor = db.saved_grids.find({"user_id": user.user_id}, {"_id": 0}).sort("created_at", -1).limit(200)
-    return await cursor.to_list(200)
+    grids = await cursor.to_list(200)
+    # For each grid, find the first Loto draw that occurred on or after created_at date
+    # and compute matches. If no draw yet, result is None (pending).
+    all_draws = await _get_all_draws(user.user_id)
+    # sorted asc by date
+    for g in grids:
+        created_date = g["created_at"][:10]  # ISO string YYYY-MM-DD
+        target_draw = None
+        for d in all_draws:
+            if d["date"] >= created_date:
+                target_draw = d
+                break
+        if target_draw:
+            actual_set = set(target_draw["numbers"])
+            main_matches = len(actual_set & set(g["numbers"]))
+            chance_match = target_draw["chance"] == g["chance"]
+            g["result"] = {
+                "target_date": target_draw["date"],
+                "target_numbers": target_draw["numbers"],
+                "target_chance": target_draw["chance"],
+                "main_matches": main_matches,
+                "chance_match": chance_match,
+                "rank_label": _payout_rank(main_matches, chance_match),
+            }
+        else:
+            g["result"] = None
+    return grids
+
+
+def _payout_rank(main_matches: int, chance_match: bool) -> str:
+    """FDJ Loto rank label based on matches."""
+    if main_matches == 5 and chance_match: return "Rang 1 · Jackpot"
+    if main_matches == 5: return "Rang 2"
+    if main_matches == 4 and chance_match: return "Rang 3"
+    if main_matches == 4: return "Rang 4"
+    if main_matches == 3 and chance_match: return "Rang 5"
+    if main_matches == 3: return "Rang 6"
+    if main_matches == 2 and chance_match: return "Rang 7"
+    if main_matches == 2: return "Rang 8"
+    if chance_match: return "Rang 9 · N° Chance"
+    return "Perdu"
+
+
+class VerifyGridRequest(BaseModel):
+    numbers: List[int]
+    chance: int
+
+
+@api_router.post("/grids/verify")
+async def verify_grid(payload: VerifyGridRequest, user: User = Depends(get_current_user)):
+    """
+    Verify an arbitrary grid against the full user history.
+    Returns: distribution of main matches (0..5), chance hit rate, and best historical hits.
+    """
+    if not _valid_draw(payload.numbers, payload.chance):
+        raise HTTPException(status_code=400, detail="Grille invalide : 5 numéros uniques (1-49) + 1 chance (1-10)")
+
+    draws = await _get_all_draws(user.user_id)
+    total = len(draws)
+    if total == 0:
+        raise HTTPException(status_code=400, detail="Aucun tirage. Importez d'abord un CSV ou générez la démo.")
+
+    grid_set = set(payload.numbers)
+    dist = [0] * 6  # 0..5 main matches
+    chance_hits = 0
+    combined_5_chance = 0
+    per_rank = {r: 0 for r in ["Rang 1 · Jackpot", "Rang 2", "Rang 3", "Rang 4", "Rang 5",
+                                "Rang 6", "Rang 7", "Rang 8", "Rang 9 · N° Chance", "Perdu"]}
+    best_hits = []  # (matches, chance_match, draw)
+
+    for d in draws:
+        matches = len(grid_set & set(d["numbers"]))
+        chance_match = d["chance"] == payload.chance
+        dist[matches] += 1
+        if chance_match:
+            chance_hits += 1
+        if matches == 5 and chance_match:
+            combined_5_chance += 1
+        rank = _payout_rank(matches, chance_match)
+        per_rank[rank] += 1
+        if matches >= 3 or (matches >= 2 and chance_match):
+            best_hits.append({
+                "date": d["date"],
+                "numbers": d["numbers"],
+                "chance": d["chance"],
+                "main_matches": matches,
+                "chance_match": chance_match,
+                "rank": rank,
+            })
+
+    best_hits.sort(key=lambda x: (x["main_matches"], x["chance_match"]), reverse=True)
+    return {
+        "total_draws": total,
+        "grid": {"numbers": sorted(payload.numbers), "chance": payload.chance},
+        "distribution": [{"main_matches": i, "count": dist[i]} for i in range(6)],
+        "chance_hits": chance_hits,
+        "combined_5_and_chance": combined_5_chance,
+        "per_rank": [{"rank": k, "count": v} for k, v in per_rank.items() if v > 0],
+        "best_hits": best_hits[:20],
+    }
 
 
 @api_router.delete("/grids/{grid_id}")

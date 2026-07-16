@@ -16,6 +16,7 @@ import DataImport from "@/pages/views/DataImport";
 import Backtest from "@/pages/views/Backtest";
 import Heatmap from "@/pages/views/Heatmap";
 import Alerts from "@/pages/views/Alerts";
+import Verify from "@/pages/views/Verify";
 
 const AppRoutes = () => {
   const location = useLocation();
@@ -34,6 +35,7 @@ const AppRoutes = () => {
         <Route path="heatmap" element={<Heatmap />} />
         <Route path="generator" element={<Generator />} />
         <Route path="backtest" element={<Backtest />} />
+        <Route path="verify" element={<Verify />} />
         <Route path="grids" element={<MyGrids />} />
         <Route path="alerts" element={<Alerts />} />
         <Route path="import" element={<DataImport />} />

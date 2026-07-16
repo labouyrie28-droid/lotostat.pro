@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 3: Verified bug fix (React insertBefore/NotFoundError) + 2 new features (POST /grids/verify + GET /grids result attachment). Backend 6/6 new tests pass (14/14 cumulative). Frontend: 2 full navigation passes over ALL 11 sidebar views produced ZERO insertBefore or NotFoundError errors. Verify page (analysis + validation) and MyGrids page (result panel + pending state) work end-to-end against real 1048-draw FDJ dataset.",
+  "tested_scope": ["backend", "frontend", "integration", "bug-fix-regression"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "passed": [
+    "BUG FIX CONFIRMED: 2 full navigation passes over Vue d'ensemble → Historique → Statistiques → Chauds/Froids (4 tabs cycled) → Heatmap → Générateur → Backtest → Vérif grille → Mes grilles → Alertes email → Données produced ZERO 'insertBefore' or 'NotFoundError' or 'commitPlacement' errors (only 4 harmless recharts width=-1 mount warnings and 1 initial /auth/me 401 race).",
+    "Sidebar exposes 11 nav items in correct order, including new 'Vérif grille' entry (data-testid nav-v-rif-grille) linking to /dashboard/verify.",
+    "POST /api/grids/verify {numbers:[7,13,22,31,46], chance:5} against 1048 real FDJ draws returns total_draws=1048, distribution length=6 (0..5 matches, sum equals total), chance_hits=100, combined_5_and_chance=0, per_rank list, best_hits capped at 20 items.",
+    "POST /api/grids/verify returns 400 for duplicates in numbers, out-of-range number (50), and chance out-of-range (11). Missing chance returns 422 (FastAPI/Pydantic default, acceptable).",
+    "GET /api/grids attaches 'result' object (target_date, target_numbers, target_chance, main_matches, chance_match, rank_label) when a draw exists after created_at; returns result=null otherwise. Verified with a seed grid dated 2025-01-01 → result attached (Perdu, 0/5), and existing grid dated 2026-07-16 → pending (result=null, last draw is 2026-07-15).",
+    "Frontend /dashboard/verify: 5 verify-num-* inputs + 1 verify-chance input + verify-btn. Client-side validation rejects duplicate numbers with toast 'Les 5 numéros doivent être uniques'. Valid submit renders distribution cards (match-0..match-5), per-rank bar chart, and best-hits section.",
+    "Frontend /dashboard/grids: cards show either result panel (rank badge + X/5 + colored balls of the target draw, matched numbers highlighted) OR 'En attente du prochain tirage' pending state with clock icon — both states confirmed on the same page in the same session.",
+    "Frontend index.js confirmed: no React.StrictMode wrapper (only QueryClientProvider > App). This eliminates the double-effect that was triggering commitPlacement/insertBefore with Sonner Toaster portal in dev mode.",
+    "Auth path unchanged: cookie session_token → /auth/me works, dashboard shell renders user name/email from AuthContext."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iter3.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/grids does an O(N_grids × N_draws) linear scan per grid to find the first draw ≥ created_at. Since draws are already sorted asc, use bisect.bisect_left on the pre-extracted date list for O(log N) — matters as history grows past a few thousand draws.",
+    "POST /api/grids/verify does a full-scan over draws (fine for 1048, becomes slow beyond ~50k). Consider precomputing per-user aggregates if history explodes.",
+    "server.py is ~1100 lines — split into modules (auth, draws, stats, backtest, alerts, grids) for maintainability (also flagged in iteration 2).",
+    "Verify page uses type='number' inputs with min/max — client validation is explicit, good. Consider disabling verify-btn while inputs are incomplete for UX polish (currently disabled only during loading).",
+    "MyGrids uses new Date(g.created_at).toLocaleString('fr-FR') — safe. rankColor() correctly maps every rank_label returned by _payout_rank."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (6/6 new, 14/14 cumulative)", "frontend": "100% of tested flows"},
+  "test_credentials": "session_token=test_fdj_1784196939161 (user test-fdj-1784196939161, has 1048 FDJ draws pre-imported). Set as cookie for browser tests or Bearer token for API tests. Retained in DB.",
+  "seed_data_creation": "Temporarily inserted a saved_grid dated 2025-01-01 to prove GET /grids attaches 'result' — DELETED after verification.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "React.StrictMode removal fully resolved the insertBefore/NotFoundError bug — confirmed with 22 navigation clicks + tab cycling with pageerror listener. New endpoint POST /api/grids/verify + enriched GET /api/grids fully working. backend_test.py now has TestGridVerify + TestGridsListResult classes (env vars TEST_TOKEN + REACT_APP_BACKEND_URL required to run).",
+  "rca_of_the_issue": "The React 'insertBefore' / NotFoundError (commitPlacement) was caused by React.StrictMode double-invoking effects/renders in dev, which conflicts with the Sonner Toaster portal (mounted at Dashboard level) and possibly Radix portal children when route transitions triggered concurrent mount/unmount. Removing StrictMode from index.js (kept QueryClientProvider) eliminated the double-effect cycle. Verified by 2× full traversal of all 11 dashboard routes + tab-cycling on Chauds/Froids — 0 pageerror events, 0 console errors matching /insertBefore|NotFoundError|commitPlacement/."
+}
