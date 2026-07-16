@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 5: insertBefore/NotFoundError fix VERIFIED. Aggressive navigation hammering (2 full-reload round trips + 3 SPA-click round trips = 110+ route changes + 12 Hot/Cold tab switches) produced ZERO insertBefore/NotFoundError/removeChild errors. Private-mode whitelist code path verified (ALLOWED_EMAILS=labouyrie28@gmail.com in .env, code raises 403 with French detail when email not in list). Backend regression 8/8 pytest passing: existing bearer token still works, backtest gains fields (gross_gains/total_cost/net_gains/roi_percent + grid_cost=2.20 + payout_table) intact, verify/grids/draws/stats endpoints all 200.",
+  "tested_scope": ["backend", "frontend", "regression"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "passed": [
+    "index.html: lang='fr', translate='no', <meta google notranslate>, body+root class='notranslate' — confirmed live.",
+    "App.js: RootErrorBoundary wraps app, Toaster placed OUTSIDE BrowserRouter — confirmed via file inspection.",
+    "SPA-click navigation stress test: 3 cycles × 22 links (forward+reverse) = 66 in-app route changes: 0 pageerrors, 0 insertBefore/NotFoundError.",
+    "Full-reload navigation stress: 2 cycles × 22 goto = 44 hard nav: 0 pageerrors.",
+    "HotCold tab switching (Chauds/Froids/Retards/Tous × 3) = 12 tab clicks: 0 errors.",
+    "Private mode: POST /api/auth/session with invalid session_id → 401. Code inspection lines 122-124 of server.py confirms 403 with 'Accès refusé. Cette application est actuellement en mode privé.' when email not in ALLOWED_EMAILS whitelist.",
+    "ALLOWED_EMAILS='labouyrie28@gmail.com' present in /app/backend/.env.",
+    "Regression: existing Bearer token 'test_fdj_1784196939161' still valid on /auth/me, /draws, /stats, /grids, /verify, /backtest.",
+    "Backtest gains: POST /api/backtest returns grid_cost=2.20, payout_table dict, per-strategy gross_gains/total_cost/net_gains/roi_percent as floats, math consistent (net ≈ gross − cost within 0.05€)."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iter5.py",
+    "/app/test_reports/pytest/iter5.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Cannot end-to-end verify the 403 response for a non-whitelisted email without a live Google OAuth session; code path was reviewed and env var is set correctly, but a real login attempt from a non-whitelisted email is the only 100% E2E proof.",
+    "server.py still ~1136 lines — recurring recommendation to split into modules (non-blocking).",
+    "PostHog script in index.html still uses parentNode.insertBefore dynamically; the RootErrorBoundary + notranslate combo appears to have neutralized the issue, but PostHog remains the most likely re-offender if a future browser extension mutates the head."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter5.py", "/app/test_reports/iteration_5.json"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (0 DOM errors across 110+ nav events)"},
+  "test_credentials": "Bearer test_fdj_1784196939161 (existing FDJ test user, 1048 draws).",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "insertBefore fix appears solid. If it resurfaces, the most likely trigger is either (a) a new component mounting a portal outside the router, or (b) an external script (PostHog/Emergent main.js) inserting nodes during a React commit. Reproduction command: cookie session_token=test_fdj_1784196939161, then rapid SPA clicks across all 11 sidebar items. To retest whitelist E2E, set ALLOWED_EMAILS to a fake email temporarily and attempt a real Google login.",
+  "rca_of_the_issue": "Prior insertBefore bug root causes were: (1) Chrome auto-translate on lang=en French page mutating text nodes during React commit → fixed with lang=fr + notranslate everywhere; (2) Sonner Toaster inside BrowserRouter re-mounting portal on route change → fixed by moving outside router; (3) PostHog dynamic script insert → mitigated via RootErrorBoundary auto-recover. All three mitigations verified live; aggressive nav stress produced zero regressions."
+}

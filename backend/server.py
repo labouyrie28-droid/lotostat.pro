@@ -116,6 +116,13 @@ async def create_session(payload: SessionRequest, response: Response):
     picture = data.get("picture")
     session_token = data["session_token"]
 
+    # Access control: private mode — only whitelisted emails can log in.
+    # Whitelist is a comma-separated list in ALLOWED_EMAILS env var.
+    # Leave empty to allow anyone.
+    allowed = [e.strip().lower() for e in os.environ.get("ALLOWED_EMAILS", "").split(",") if e.strip()]
+    if allowed and email.lower() not in allowed:
+        raise HTTPException(status_code=403, detail="Accès refusé. Cette application est actuellement en mode privé.")
+
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
         user_id = existing["user_id"]

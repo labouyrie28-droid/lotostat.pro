@@ -1,4 +1,5 @@
 import "@/App.css";
+import React from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
@@ -20,7 +21,6 @@ import Verify from "@/pages/views/Verify";
 
 const AppRoutes = () => {
   const location = useLocation();
-  // Synchronous check: catch OAuth callback before any other route
   if (location.hash?.includes("session_id=")) {
     return <AuthCallback />;
   }
@@ -44,21 +44,58 @@ const AppRoutes = () => {
   );
 };
 
+/**
+ * ErrorBoundary catches React DOM commit errors (e.g. insertBefore issues
+ * caused by browser extensions like Chrome auto-translate, Google Translate,
+ * or password managers that mutate the DOM). Instead of crashing the whole
+ * app it re-mounts the tree.
+ */
+class RootErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    // Log once. Auto-recover on next tick.
+    // eslint-disable-next-line no-console
+    console.warn("[Root recovery]", error?.message);
+    setTimeout(() => this.setState({ hasError: false }), 50);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#050507]">
+          <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Récupération…</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   return (
-    <div className="App dark">
-      <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-          <Toaster
-            theme="dark"
-            position="top-right"
-            toastOptions={{
-              className: "!bg-[#0d0d10] !border-white/10 !text-white",
-            }}
-          />
-        </BrowserRouter>
-      </AuthProvider>
+    <div className="App dark" translate="no" suppressHydrationWarning>
+      <RootErrorBoundary>
+        <AuthProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </AuthProvider>
+      </RootErrorBoundary>
+      {/* Toaster is OUTSIDE the router so it doesn't get re-mounted on route change */}
+      <Toaster
+        theme="dark"
+        position="top-right"
+        richColors={false}
+        closeButton={false}
+        toastOptions={{
+          className: "!bg-[#0d0d10] !border-white/10 !text-white",
+        }}
+      />
     </div>
   );
 }
