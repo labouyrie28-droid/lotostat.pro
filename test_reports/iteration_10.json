@@ -1,0 +1,22 @@
+{
+  "summary": "Iteration 10 — Post code-review fix validation. All 1 HIGH + 3 MEDIUM + 2 LOW fixes verified. 20/20 pytest backend tests pass. Frontend Wheel target-5+ disabled logic verified (poolSize>8 => disabled, ==8 => enabled). MyGrids page displays the violet 'SIMULATION HISTORIQUE' badge for saved grids compared against the last historical draw when no future draw exists.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter10_fixes.py",
+    "/app/test_reports/pytest/iter10.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1523 lines — split into modules recommended (auth, grids, stats, alerts, wheel) for maintainability.",
+    "list_grids historical-fallback marks EVERY grid as is_historical when dataset ends before 'now' (all 3 grids in test showed the badge). Acceptable while dataset is historical-only, but once live-updating draws are ingested the badge should only appear when target_draw < created_at."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter10_fixes.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Sessions injected via mongosh and cleaned up after run. Whitelisted user user_34f592ce5705 (labouyrie28@gmail.com) with 1048 draws pre-loaded is the only authorized account.",
+  "seed_data_creation": "Created ephemeral test_wl_* and test_bad_tok_* sessions + one non-whitelisted user (test_bad_*). All cleaned up post-test. Three saved grids created via API during frontend test remain on the whitelisted user (Supprimer buttons available in UI).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All iter-10 fixes verified. Reuse /app/backend/tests/test_iter10_fixes.py for regression. Route for MyGrids is /dashboard/grids (not /dashboard/my-grids). ALLOWED_EMAILS whitelist is now enforced on every request — always create sessions for labouyrie28@gmail.com. Three residual saved grids exist under the whitelisted user from this test run (visible on Mes Grilles page).",
+  "rca of the issue": "N/A — validation iteration. All fixes behave as intended: (1) HIGH result-fallback uses last historical draw with is_historical:true; (2) whitelist returns 403 with correct French message for unauthorized emails; (3) wheel 400s cleanly for target=5 K>8, otherwise runs correctly (K=8 t=3 => 9 tickets, p_pool=2.562%, p_single=0.508%); (4) alert idempotency logic reads alert_sent_log before send and writes after — code-verified; (5) credible_top5 scores clamped [0,1]; (6) imports clean, /api/ returns 200 with correct message."
+}

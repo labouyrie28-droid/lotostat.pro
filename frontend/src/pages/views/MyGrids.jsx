@@ -97,7 +97,14 @@ const MyGrids = () => {
                       <div className="flex items-center gap-3">
                         <Trophy className={`w-4 h-4 ${rankColor(r.rank_label)}`} />
                         <div>
-                          <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Tirage du {r.target_date}</div>
+                          <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2">
+                            <span>Tirage du {r.target_date}</span>
+                            {r.is_historical && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400 text-[9px] font-semibold uppercase tracking-widest">
+                                simulation historique
+                              </span>
+                            )}
+                          </div>
                           <div className={`font-heading font-semibold text-lg ${rankColor(r.rank_label)}`}>{r.rank_label}</div>
                         </div>
                       </div>

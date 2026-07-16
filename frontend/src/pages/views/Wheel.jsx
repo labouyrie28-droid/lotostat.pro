@@ -99,7 +99,7 @@ const Wheel = () => {
                   key={t}
                   data-testid={`target-${t}`}
                   onClick={() => setTarget(t)}
-                  disabled={t > poolSize}
+                  disabled={t > poolSize || (t === 5 && poolSize > 8)}
                   className={`h-10 px-4 rounded-full border font-mono-tab text-sm transition-colors disabled:opacity-30 ${
                     target === t ? "bg-emerald-400 text-black border-emerald-400 font-semibold" : "border-white/10 text-zinc-400 hover:text-white"
                   }`}

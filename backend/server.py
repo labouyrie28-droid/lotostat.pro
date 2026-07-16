@@ -1,14 +1,15 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, UploadFile, File, Depends
-from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import os
 import io
 import csv
 import random
 import logging
 import uuid
+import asyncio
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
@@ -91,6 +92,12 @@ async def get_current_user(request: Request) -> User:
     user_doc = await db.users.find_one({"user_id": session_doc["user_id"]}, {"_id": 0})
     if not user_doc:
         raise HTTPException(status_code=401, detail="User not found")
+
+    # Enforce whitelist on every request (private mode)
+    allowed = [e.strip().lower() for e in os.environ.get("ALLOWED_EMAILS", "").split(",") if e.strip()]
+    if allowed and user_doc.get("email", "").lower() not in allowed:
+        raise HTTPException(status_code=403, detail="Accès refusé (mode privé)")
+
     return User(**user_doc)
 
 
@@ -692,6 +699,8 @@ async def generate_grid(payload: GenerateGridRequest, user: User = Depends(get_c
             seen.add(key)
             chance_n = pick_by_weights(weights_chance, 1)[0]
             score = credibility(nums)
+            # Clamp to [0, 1] for consistent % display in UI
+            score = max(0.0, min(1.0, score))
             candidates.append({
                 "numbers": nums,
                 "chance": chance_n,
@@ -793,29 +802,35 @@ async def wheel_system(payload: WheelRequest, user: User = Depends(get_current_u
         raise HTTPException(400, "Les numéros doivent être entre 1 et 49")
     if payload.chance is not None and not (1 <= payload.chance <= 10):
         raise HTTPException(400, "Chance entre 1 et 10")
+    # Guard: t=5 on a large pool blows up (up to C(12,5)=792 tickets ≈ 1742€)
+    if t == 5 and K > 8:
+        raise HTTPException(400, "Pour target 5+, limite le pool à 8 numéros max (sinon >100 grilles).")
 
-    # All t-subsets of the pool that we need to cover
-    to_cover = set(combinations(pool, t))
-    # Candidate tickets : all 5-subsets of the pool
-    candidates = list(combinations(pool, 5))
+    MAX_TICKETS = 100  # safety cap to avoid runaway output
 
-    selected = []
-    uncovered = set(to_cover)
-    max_iterations = len(candidates)  # safety bound
-    while uncovered and max_iterations > 0:
-        max_iterations -= 1
-        # Greedy pick: ticket covering the most uncovered t-subsets
-        best_ticket = None
-        best_cover = frozenset()
-        for c in candidates:
-            covered_by_c = frozenset(combinations(c, t)) & uncovered
-            if len(covered_by_c) > len(best_cover):
-                best_cover = covered_by_c
-                best_ticket = c
-        if best_ticket is None:
-            break
-        selected.append(list(best_ticket))
-        uncovered -= best_cover
+    def _compute_cover():
+        """Blocking CPU work — offloaded to a thread to keep event loop free."""
+        to_cover = set(combinations(pool, t))
+        candidates = list(combinations(pool, 5))
+        selected_local = []
+        uncovered = set(to_cover)
+        iterations = 0
+        while uncovered and iterations < MAX_TICKETS:
+            iterations += 1
+            best_ticket = None
+            best_cover = frozenset()
+            for c in candidates:
+                covered_by_c = frozenset(combinations(c, t)) & uncovered
+                if len(covered_by_c) > len(best_cover):
+                    best_cover = covered_by_c
+                    best_ticket = c
+            if best_ticket is None:
+                break
+            selected_local.append(list(best_ticket))
+            uncovered -= best_cover
+        return selected_local, len(uncovered) == 0
+
+    selected, complete = await asyncio.to_thread(_compute_cover)
 
     # Attach chance number
     chance_num = payload.chance if payload.chance is not None else random.randint(1, 10)
@@ -866,17 +881,21 @@ async def save_grid(payload: SaveGridRequest, user: User = Depends(get_current_u
 async def list_grids(user: User = Depends(get_current_user)):
     cursor = db.saved_grids.find({"user_id": user.user_id}, {"_id": 0}).sort("created_at", -1).limit(200)
     grids = await cursor.to_list(200)
-    # For each grid, find the first Loto draw that occurred on or after created_at date
-    # and compute matches. If no draw yet, result is None (pending).
-    all_draws = await _get_all_draws(user.user_id)
-    # sorted asc by date
+    all_draws = await _get_all_draws(user.user_id)  # sorted asc by date
     for g in grids:
-        created_date = g["created_at"][:10]  # ISO string YYYY-MM-DD
+        created_date = g["created_at"][:10]
         target_draw = None
+        is_historical = False
+        # Prefer the first draw on/after created_at (the "next" draw after save)
         for d in all_draws:
             if d["date"] >= created_date:
                 target_draw = d
                 break
+        # Fallback: if no draw is on/after the save date (typical when the dataset
+        # is historical only), compare against the most recent draw as a "historical simulation"
+        if target_draw is None and all_draws:
+            target_draw = all_draws[-1]
+            is_historical = True
         if target_draw:
             actual_set = set(target_draw["numbers"])
             main_matches = len(actual_set & set(g["numbers"]))
@@ -888,6 +907,7 @@ async def list_grids(user: User = Depends(get_current_user)):
                 "main_matches": main_matches,
                 "chance_match": chance_match,
                 "rank_label": _payout_rank(main_matches, chance_match),
+                "is_historical": is_historical,
             }
         else:
             g["result"] = None
@@ -1372,8 +1392,7 @@ async def send_alert(payload: SendAlertRequest, user: User = Depends(get_current
         "html": html,
     }
     try:
-        import asyncio as _a
-        result = await _a.to_thread(resend.Emails.send, params)
+        result = await asyncio.to_thread(resend.Emails.send, params)
         return {"status": "sent", "to": to_email, "email_id": result.get("id"), "grids": grids}
     except Exception as e:
         logger.error(f"Resend error: {e}")
@@ -1425,9 +1444,18 @@ async def _run_daily_alerts():
     if not RESEND_API_KEY or not resend:
         logger.info("Daily alert skipped: Resend not configured")
         return
+    today_iso = today.isoformat()
     cursor = db.alert_prefs.find({"enabled": True}, {"_id": 0})
     async for pref in cursor:
         try:
+            # Idempotency: skip if already sent today for this user
+            already = await db.alert_sent_log.find_one({
+                "user_id": pref["user_id"],
+                "date": today_iso,
+            })
+            if already:
+                continue
+
             user_doc = await db.users.find_one({"user_id": pref["user_id"]}, {"_id": 0})
             if not user_doc:
                 continue
@@ -1447,8 +1475,13 @@ async def _run_daily_alerts():
                 "subject": f"🎯 LotoStat.Pro — Vos grilles pour le tirage du {nd.date().isoformat()}",
                 "html": html,
             }
-            import asyncio as _a
-            await _a.to_thread(resend.Emails.send, params)
+            await asyncio.to_thread(resend.Emails.send, params)
+            await db.alert_sent_log.insert_one({
+                "user_id": pref["user_id"],
+                "date": today_iso,
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "to": to_email,
+            })
             logger.info(f"Auto-alert sent to {to_email}")
         except Exception as e:
             logger.error(f"Auto-alert error for {pref.get('user_id')}: {e}")
@@ -1469,8 +1502,6 @@ logger = logging.getLogger(__name__)
 
 
 # --------- Scheduler ---------
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 scheduler = AsyncIOScheduler(timezone="Europe/Paris")
 
 
