@@ -1,0 +1,27 @@
+{
+  "short_name": "LotoStat.Pro",
+  "name": "LotoStat.Pro — Analyse Loto FDJ",
+  "description": "Analyse statistique des tirages du Loto FDJ sur 3 ans. Générez vos grilles avec méthode.",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#F59E0B",
+  "background_color": "#050507",
+  "lang": "fr",
+  "categories": ["utilities", "productivity", "finance"]
+}

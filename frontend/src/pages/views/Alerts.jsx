@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Mail, Bell, Calendar, Send, AlertTriangle } from "lucide-react";
+import { Loader2, Mail, Bell, Calendar, Send, AlertTriangle, Trophy } from "lucide-react";
 
 const strategies = [
   { key: "hot", label: "Chauds" },
@@ -19,6 +19,7 @@ const Alerts = () => {
   const [prefs, setPrefs] = useState(null);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendingResults, setSendingResults] = useState(false);
 
   const load = async () => {
     try {
@@ -55,6 +56,19 @@ const Alerts = () => {
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Envoi échoué");
     } finally { setSending(false); }
+  };
+
+  const sendResultsNow = async () => {
+    setSendingResults(true);
+    try {
+      const { data } = await api.post("/alerts/send-results", {});
+      const net = data.total_won - data.total_cost;
+      toast.success(
+        `Résultats envoyés à ${data.to} · ${data.grids_count} grille(s) · ${net >= 0 ? "+" : ""}${net.toFixed(2)}€`,
+      );
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Envoi échoué");
+    } finally { setSendingResults(false); }
   };
 
   if (!nextDraw || !prefs) {
@@ -174,6 +188,43 @@ const Alerts = () => {
           >
             {sending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
             M'envoyer les grilles maintenant
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="p-8 border-white/5 bg-[#0d0d10] space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <h2 className="font-heading text-xl font-semibold">Résultat automatique</h2>
+            </div>
+            <p className="text-xs text-zinc-500 max-w-lg leading-relaxed">
+              Reçois par email le lendemain de chaque tirage (mardi/jeudi/dimanche à 9h)
+              le récapitulatif de tes grilles sauvegardées : rang, gains théoriques, ROI.
+            </p>
+          </div>
+          <Switch
+            data-testid="results-enabled-switch"
+            checked={prefs.results_enabled || false}
+            onCheckedChange={(v) => savePrefs({ results_enabled: v })}
+            disabled={saving || !nextDraw.resend_configured}
+          />
+        </div>
+
+        <div className="pt-4 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
+          <div className="text-xs text-zinc-500">
+            Tester en envoyant le récapitulatif du <span className="text-amber-400">dernier tirage connu</span>.
+          </div>
+          <Button
+            data-testid="send-results-now-btn"
+            disabled={sendingResults || !nextDraw.resend_configured}
+            onClick={sendResultsNow}
+            variant="outline"
+            className="rounded-full border-amber-500/40 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 h-10 px-5"
+          >
+            {sendingResults ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trophy className="w-4 h-4 mr-2" />}
+            Envoyer le récap maintenant
           </Button>
         </div>
       </Card>

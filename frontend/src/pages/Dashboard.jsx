@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import {
-  LayoutDashboard, History, BarChart3, Flame, Grid3X3, Sparkles, TrendingUp, Search, Zap, Bookmark, Bell, Upload, LogOut, Sparkle,
+  LayoutDashboard, History, BarChart3, Flame, Grid3X3, Sparkles, TrendingUp, Search, Zap, GitCompareArrows, Bookmark, Bell, Upload, LogOut, Sparkle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ const navItems = [
   { to: "/dashboard/wheel", icon: Zap, label: "Système Réducteur" },
   { to: "/dashboard/backtest", icon: TrendingUp, label: "Backtest" },
   { to: "/dashboard/verify", icon: Search, label: "Vérif grille" },
+  { to: "/dashboard/compare", icon: GitCompareArrows, label: "Comparer" },
   { to: "/dashboard/grids", icon: Bookmark, label: "Mes grilles" },
   { to: "/dashboard/alerts", icon: Bell, label: "Alertes email" },
   { to: "/dashboard/import", icon: Upload, label: "Données" },

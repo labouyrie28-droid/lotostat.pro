@@ -1,0 +1,35 @@
+{
+  "summary": "Iter 14 — Tested Feature #12 (auto-results email), #14 (PWA), #17 (Comparateur). Backend: 9/9 pytest tests pass — /api/alerts/prefs GET returns results_enabled=false by default, POST persists true/false, legacy payload without results_enabled defaults to False, /api/alerts/send-results returns 400 when no draws AND 200 status=sent with total_won/total_cost/grids_count/draw_date fields when eligible grids exist (real Resend email successfully sent to labouyrie28@gmail.com, email_id returned). APScheduler logs confirm 'Scheduler started (grids @12:00 · results @09:00 Paris)'. PWA: /manifest.json 200 with correct JSON (name/short_name/display=standalone/theme_color=#F59E0B/start_url=/), /icon.svg 200 image/svg+xml, index.html has <link rel=manifest> and <link rel=icon type=image/svg+xml>. Frontend: /dashboard/compare loads, select-grid buttons list saved grids, selecting 2 grilles renders Analyse comparative with Somme/Pairs/Impairs/Étendue/Chauds/Froids/Décennies. Sidebar 'Comparer' nav item present with GitCompareArrows icon. Landing page loads with 'Thomas Labouyrie' signature. Fixed 1 critical bug: missing 'Trophy' import in Alerts.jsx that crashed /dashboard/alerts page entirely.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Alerts.jsx", "issue": "ReferenceError: Trophy is not defined — icon used at lines 199 and 226 but not imported from lucide-react. Crashed the entire /dashboard/alerts page (blank React error boundary). FIXED by adding Trophy to the lucide-react import.", "selector": "[data-testid=\"alerts-page\"]", "priority": "CRITICAL (fixed)"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter14_results_alerts.py",
+    "/app/test_reports/pytest/iter14.xml"
+  ],
+  "action_items": [
+    "None blocking — the Trophy import bug has been fixed and verified. Main agent should be aware a testing agent modified /app/frontend/src/pages/views/Alerts.jsx (added Trophy to lucide-react import)."
+  ],
+  "critical_code_review_comments": [
+    "Alerts.jsx used Trophy icon without importing it. Recommend adding an ESLint rule (react/jsx-no-undef) or pre-commit check to catch missing lucide-react imports before deploy.",
+    "server.py still ~1927 lines (was ~1627 in iter13). Adding scheduled results alerts pushed it further past the 700-line refactor threshold — split into modules/alerts.py, modules/scheduler.py, modules/pwa_render.py.",
+    "_render_results_email_html hard-codes _grid_payout / _payout_rank / FDJ_GRID_COST — matches existing patterns but couples email rendering to payout logic; would benefit from a shared 'grid results computation' helper reused by /grids/verify and /alerts/send-results.",
+    "The daily grids alert log key uses type: {$ne: 'results'} to skip results-type entries — clever but fragile; if a third alert type is added, the query semantics silently break. Prefer explicit type: 'grids'."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/views/Alerts.jsx (added Trophy to lucide-react import)",
+    "/app/backend/tests/test_iter14_results_alerts.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (after fix)"},
+  "test_credentials": "Injected ephemeral sessions on existing seeded user test-fdj-1784196939161 (1048 draws). Sessions and TEST_/TESTFE_ saved_grids cleaned post-test.",
+  "seed_data_creation": "Ephemeral saved_grids and user_sessions created & removed for testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 3 new features work end-to-end. PWA manifest is served through the same preview host (ingress routes non-/api to frontend). For future auth-gated FE tests, add cookie session_token with secure=True, sameSite='None' on domain lotto-stats-analyzer.preview.emergentagent.com and rely on data-testid selectors on Compare page: select-grid-<id>, comparison-result, clear-selection-btn.",
+  "rca of the issue": "Alerts.jsx crash — Trophy icon added in the new 'Résultat automatique' card but never added to the lucide-react named import at line 8. React re-rendered on route entry, threw ReferenceError, and the root error boundary showed a blank page. Reproduction: navigate to /dashboard/alerts as an authenticated user. Fix: added Trophy to the lucide-react import list. Verified: /dashboard/alerts now renders with data-testid alerts-page, results-enabled-switch, and send-results-now-btn visible."
+}

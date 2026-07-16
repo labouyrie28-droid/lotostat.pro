@@ -3,6 +3,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
+import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 
 import Landing from "@/pages/Landing";
 import AuthCallback from "@/pages/AuthCallback";
@@ -19,6 +20,7 @@ import Heatmap from "@/pages/views/Heatmap";
 import Alerts from "@/pages/views/Alerts";
 import Verify from "@/pages/views/Verify";
 import Wheel from "@/pages/views/Wheel";
+import Compare from "@/pages/views/Compare";
 import SharedGrid from "@/pages/SharedGrid";
 
 const AppRoutes = () => {
@@ -40,6 +42,7 @@ const AppRoutes = () => {
         <Route path="backtest" element={<Backtest />} />
         <Route path="verify" element={<Verify />} />
         <Route path="wheel" element={<Wheel />} />
+        <Route path="compare" element={<Compare />} />
         <Route path="grids" element={<MyGrids />} />
         <Route path="alerts" element={<Alerts />} />
         <Route path="import" element={<DataImport />} />
@@ -121,6 +124,7 @@ function App() {
           className: "!bg-[#0d0d10] !border-white/10 !text-white",
         }}
       />
+      <PWAInstallPrompt />
     </div>
   );
 }

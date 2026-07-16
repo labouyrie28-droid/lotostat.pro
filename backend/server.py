@@ -1571,18 +1571,20 @@ class AlertPrefs(BaseModel):
     strategy: Literal["hot", "cold", "balanced", "weighted_random"] = "balanced"
     grids_count: int = 3
     email: Optional[str] = None
+    results_enabled: bool = False
 
 
 @api_router.get("/alerts/prefs")
 async def get_alert_prefs(user: User = Depends(get_current_user)):
     doc = await db.alert_prefs.find_one({"user_id": user.user_id}, {"_id": 0})
     if not doc:
-        return {"enabled": False, "strategy": "balanced", "grids_count": 3, "email": user.email}
+        return {"enabled": False, "strategy": "balanced", "grids_count": 3, "email": user.email, "results_enabled": False}
     return {
         "enabled": doc.get("enabled", False),
         "strategy": doc.get("strategy", "balanced"),
         "grids_count": doc.get("grids_count", 3),
         "email": doc.get("email") or user.email,
+        "results_enabled": doc.get("results_enabled", False),
     }
 
 
@@ -1596,6 +1598,7 @@ async def set_alert_prefs(payload: AlertPrefs, user: User = Depends(get_current_
             "strategy": payload.strategy,
             "grids_count": max(1, min(10, payload.grids_count)),
             "email": payload.email or user.email,
+            "results_enabled": payload.results_enabled,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }},
         upsert=True,
@@ -1619,6 +1622,7 @@ async def _run_daily_alerts():
             already = await db.alert_sent_log.find_one({
                 "user_id": pref["user_id"],
                 "date": today_iso,
+                "type": {"$ne": "results"},
             })
             if already:
                 continue
@@ -1648,10 +1652,241 @@ async def _run_daily_alerts():
                 "date": today_iso,
                 "sent_at": datetime.now(timezone.utc).isoformat(),
                 "to": to_email,
+                "type": "grids",
             })
             logger.info(f"Auto-alert sent to {to_email}")
         except Exception as e:
             logger.error(f"Auto-alert error for {pref.get('user_id')}: {e}")
+
+
+def _render_results_email_html(user_name: str, draw: dict, grids_with_results: list, total_won: float, total_cost: float) -> str:
+    """Render the 'grid results' email HTML after a draw."""
+    balls_actual = ""
+    for n in draw["numbers"]:
+        balls_actual += (
+            f'<span style="display:inline-block;width:36px;height:36px;line-height:36px;'
+            f'border-radius:50%;background:#F59E0B;color:#111;font-family:monospace;font-weight:700;'
+            f'text-align:center;margin-right:6px;">{n}</span>'
+        )
+    balls_actual += (
+        f'<span style="display:inline-block;width:36px;height:36px;line-height:36px;border-radius:50%;'
+        f'background:#111;color:#F59E0B;font-family:monospace;font-weight:700;'
+        f'text-align:center;margin-left:8px;border:2px solid #F59E0B;">{draw["chance"]}</span>'
+    )
+
+    rows = ""
+    for i, g in enumerate(grids_with_results, 1):
+        actual_set = set(draw["numbers"])
+        balls_html = ""
+        for n in g["numbers"]:
+            hit = n in actual_set
+            balls_html += (
+                f'<span style="display:inline-block;width:32px;height:32px;line-height:32px;'
+                f'border-radius:50%;background:{"#10B981" if hit else "#222"};color:#fff;font-family:monospace;font-weight:600;'
+                f'text-align:center;margin-right:5px;border:1px solid {"#10B981" if hit else "#333"};">{n}</span>'
+            )
+        chance_hit = g["chance"] == draw["chance"]
+        balls_html += (
+            f'<span style="display:inline-block;width:32px;height:32px;line-height:32px;border-radius:50%;'
+            f'background:{"#10B981" if chance_hit else "#111"};color:#fff;font-family:monospace;font-weight:700;'
+            f'text-align:center;margin-left:6px;border:2px solid {"#10B981" if chance_hit else "#F59E0B"};">{g["chance"]}</span>'
+        )
+        payout = g["payout"]
+        payout_color = "#10B981" if payout > 0 else "#666"
+        payout_txt = f"{payout:,.2f} €".replace(",", " ") if payout > 0 else "—"
+        rows += (
+            f'<tr><td style="padding:14px 0;border-top:1px solid #eee;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+            f'<span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:2px;">'
+            f'Grille #{i} · {g["main_matches"]}/5 + {"chance" if chance_hit else "0 ch."}</span>'
+            f'<span style="font-size:14px;font-weight:700;color:{payout_color};font-family:monospace;">{payout_txt}</span>'
+            f'</div>{balls_html}'
+            f'<div style="font-size:10px;color:#999;margin-top:6px;">{g["rank_label"]}</div>'
+            f'</td></tr>'
+        )
+
+    net = total_won - total_cost
+    net_color = "#10B981" if net > 0 else ("#EF4444" if net < 0 else "#666")
+    net_prefix = "+" if net > 0 else ""
+    return f"""
+    <html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:32px;margin:0;">
+      <table style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">
+        <tr><td>
+          <div style="font-size:12px;color:#F59E0B;text-transform:uppercase;letter-spacing:3px;margin-bottom:8px;">LotoStat.Pro · Résultats</div>
+          <h1 style="font-size:22px;margin:0 0 8px 0;color:#111;">Tirage du {draw["date"]}</h1>
+          <p style="color:#555;margin:0 0 20px 0;font-size:14px;">Bonjour {user_name}, voici le bilan de vos grilles.</p>
+          <div style="padding:16px;background:#0d0d10;border-radius:8px;margin-bottom:24px;">
+            <div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;">Tirage officiel</div>
+            {balls_actual}
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:20px;">
+            <div style="flex:1;padding:12px;background:#f9f9f9;border-radius:6px;text-align:center;">
+              <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;">Coût</div>
+              <div style="font-size:16px;font-weight:700;color:#111;font-family:monospace;">{total_cost:.2f} €</div>
+            </div>
+            <div style="flex:1;padding:12px;background:#f9f9f9;border-radius:6px;text-align:center;">
+              <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;">Gains</div>
+              <div style="font-size:16px;font-weight:700;color:#10B981;font-family:monospace;">{total_won:.2f} €</div>
+            </div>
+            <div style="flex:1;padding:12px;background:#f9f9f9;border-radius:6px;text-align:center;">
+              <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;">Net</div>
+              <div style="font-size:16px;font-weight:700;color:{net_color};font-family:monospace;">{net_prefix}{net:.2f} €</div>
+            </div>
+          </div>
+        </td></tr>
+        {rows}
+        <tr><td style="padding-top:24px;border-top:1px solid #eee;">
+          <p style="font-size:11px;color:#999;line-height:1.6;">
+            Le loto reste un jeu de hasard. Gains basés sur les rangs FDJ moyens (le Rang 1 est variable).
+          </p>
+        </td></tr>
+      </table>
+    </body></html>
+    """
+
+
+async def _run_results_alerts():
+    """Run every day. Day after a Loto draw (Tue/Thu/Sun), send RESULT emails
+    to opted-in users showing how their saved grids performed."""
+    today = datetime.now(timezone.utc).date()
+    # Day AFTER draw: Tue(1), Thu(3), Sun(6)
+    if today.weekday() not in (1, 3, 6):
+        return
+    if not RESEND_API_KEY or not resend:
+        logger.info("Results alert skipped: Resend not configured")
+        return
+    today_iso = today.isoformat()
+    cursor = db.alert_prefs.find({"results_enabled": True}, {"_id": 0})
+    async for pref in cursor:
+        try:
+            user_doc = await db.users.find_one({"user_id": pref["user_id"]}, {"_id": 0})
+            if not user_doc:
+                continue
+
+            # Find latest draw for that user
+            draws = await _get_all_draws(pref["user_id"])
+            if not draws:
+                continue
+            latest = draws[-1]  # already sorted asc
+            draw_date = latest["date"]
+
+            # Idempotency: skip if already sent for this draw
+            already = await db.alert_sent_log.find_one({
+                "user_id": pref["user_id"],
+                "type": "results",
+                "draw_date": draw_date,
+            })
+            if already:
+                continue
+
+            # Get user's saved grids, only those created on or before the draw date
+            grids_cursor = db.saved_grids.find(
+                {"user_id": pref["user_id"]},
+                {"_id": 0},
+            )
+            saved = await grids_cursor.to_list(500)
+            eligible = [g for g in saved if g.get("created_at", "")[:10] <= draw_date]
+            if not eligible:
+                continue
+
+            grids_with_results = []
+            total_won = 0.0
+            actual_set = set(latest["numbers"])
+            for g in eligible:
+                main_matches = len(actual_set & set(g["numbers"]))
+                chance_match = latest["chance"] == g["chance"]
+                rank_label = _payout_rank(main_matches, chance_match)
+                payout = _grid_payout(main_matches, chance_match)
+                total_won += payout
+                grids_with_results.append({
+                    "numbers": g["numbers"],
+                    "chance": g["chance"],
+                    "main_matches": main_matches,
+                    "chance_match": chance_match,
+                    "rank_label": rank_label,
+                    "payout": payout,
+                })
+            total_cost = len(eligible) * FDJ_GRID_COST
+
+            html = _render_results_email_html(
+                user_doc.get("name", "joueur"), latest, grids_with_results, total_won, total_cost,
+            )
+            to_email = pref.get("email") or user_doc["email"]
+            params = {
+                "from": SENDER_EMAIL,
+                "to": [to_email],
+                "subject": f"🎯 LotoStat.Pro — Résultats du tirage du {draw_date}",
+                "html": html,
+            }
+            await asyncio.to_thread(resend.Emails.send, params)
+            await db.alert_sent_log.insert_one({
+                "user_id": pref["user_id"],
+                "date": today_iso,
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "to": to_email,
+                "type": "results",
+                "draw_date": draw_date,
+            })
+            logger.info(f"Results email sent to {to_email} for draw {draw_date}")
+        except Exception as e:
+            logger.error(f"Results email error for {pref.get('user_id')}: {e}")
+
+
+@api_router.post("/alerts/send-results")
+async def send_results_now(user: User = Depends(get_current_user)):
+    """Manually trigger a 'results' email for the current user against the latest draw."""
+    if not RESEND_API_KEY or not resend:
+        raise HTTPException(status_code=503, detail="Service email non configuré.")
+    draws = await _get_all_draws(user.user_id)
+    if not draws:
+        raise HTTPException(status_code=400, detail="Aucun tirage. Importez d'abord un CSV FDJ.")
+    latest = draws[-1]
+    saved = await db.saved_grids.find({"user_id": user.user_id}, {"_id": 0}).to_list(500)
+    eligible = [g for g in saved if g.get("created_at", "")[:10] <= latest["date"]]
+    if not eligible:
+        raise HTTPException(status_code=400, detail="Aucune grille sauvegardée avant le dernier tirage.")
+
+    grids_with_results = []
+    total_won = 0.0
+    actual_set = set(latest["numbers"])
+    for g in eligible:
+        main_matches = len(actual_set & set(g["numbers"]))
+        chance_match = latest["chance"] == g["chance"]
+        payout = _grid_payout(main_matches, chance_match)
+        total_won += payout
+        grids_with_results.append({
+            "numbers": g["numbers"],
+            "chance": g["chance"],
+            "main_matches": main_matches,
+            "chance_match": chance_match,
+            "rank_label": _payout_rank(main_matches, chance_match),
+            "payout": payout,
+        })
+    total_cost = len(eligible) * FDJ_GRID_COST
+
+    prefs = await db.alert_prefs.find_one({"user_id": user.user_id}, {"_id": 0}) or {}
+    to_email = prefs.get("email") or user.email
+    html = _render_results_email_html(user.name, latest, grids_with_results, total_won, total_cost)
+    params = {
+        "from": SENDER_EMAIL,
+        "to": [to_email],
+        "subject": f"🎯 LotoStat.Pro — Résultats du tirage du {latest['date']}",
+        "html": html,
+    }
+    try:
+        result = await asyncio.to_thread(resend.Emails.send, params)
+        return {
+            "status": "sent",
+            "to": to_email,
+            "email_id": result.get("id"),
+            "grids_count": len(eligible),
+            "total_won": total_won,
+            "total_cost": total_cost,
+            "draw_date": latest["date"],
+        }
+    except Exception as e:
+        logger.error(f"Manual results email error: {e}")
+        raise HTTPException(status_code=500, detail=f"Échec envoi email: {e}")
 
 
 app.include_router(api_router)
@@ -1674,10 +1909,12 @@ scheduler = AsyncIOScheduler(timezone="Europe/Paris")
 
 @app.on_event("startup")
 async def _start_scheduler():
-    # Run every day at 12:00 Paris time
+    # Grids alert: every day at 12:00 Paris (sends only on draw days Mon/Wed/Sat)
     scheduler.add_job(_run_daily_alerts, "cron", hour=12, minute=0, id="daily_loto_alert", replace_existing=True)
+    # Results alert: every day at 09:00 Paris (sends only on Tue/Thu/Sun, day after a draw)
+    scheduler.add_job(_run_results_alerts, "cron", hour=9, minute=0, id="results_loto_alert", replace_existing=True)
     scheduler.start()
-    logger.info("Scheduler started (daily alerts at 12:00 Paris)")
+    logger.info("Scheduler started (grids @12:00 · results @09:00 Paris)")
 
 
 @app.on_event("shutdown")
