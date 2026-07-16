@@ -86,7 +86,7 @@ const Backtest = () => {
                 <h2 className="font-heading text-2xl font-semibold">Numéros trouvés en moyenne</h2>
               </div>
               <div className="text-xs text-zinc-500">
-                {data.sample_size} tirages · {data.grids_per_strategy} grilles/strat
+                {data.sample_size} tirages · {data.grids_per_strategy} grilles/strat · {data.grid_cost}€/grille
               </div>
             </div>
 
@@ -107,6 +107,42 @@ const Backtest = () => {
             </div>
           </Card>
 
+          {/* Cumulative gains chart */}
+          <Card className="p-6 border-white/5 bg-[#0d0d10]" data-testid="gains-chart">
+            <div className="flex items-baseline justify-between mb-6">
+              <div>
+                <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">ROI théorique</div>
+                <h2 className="font-heading text-2xl font-semibold">Gains cumulés (€)</h2>
+                <p className="text-xs text-zinc-500 mt-1">Basé sur les rangs FDJ moyens · gains bruts - coût des grilles</p>
+              </div>
+            </div>
+            <div className="h-72">
+              <ResponsiveContainer>
+                <BarChart
+                  data={data.strategies.map((s) => ({
+                    name: labels[s.strategy],
+                    strategy: s.strategy,
+                    "Gains bruts": s.gross_gains,
+                    "Coût": -s.total_cost,
+                    "Net": s.net_gains,
+                  }))}
+                >
+                  <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="name" stroke="#52525b" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="#52525b" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}€`} />
+                  <Tooltip
+                    contentStyle={{ background: "#0a0a0c", border: "1px solid #27272a", borderRadius: 8, fontSize: 12 }}
+                    cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                    formatter={(v) => `${v.toFixed(2)} €`}
+                  />
+                  <Bar dataKey="Gains bruts" fill="#10B981" fillOpacity={0.7} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Coût" fill="#EF4444" fillOpacity={0.6} radius={[0, 0, 4, 4]} />
+                  <Bar dataKey="Net" fill="#F59E0B" fillOpacity={0.9} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
           {/* Winner + detailed cards */}
           <div className="grid gap-4">
             {data.strategies.map((s, i) => (
@@ -115,7 +151,7 @@ const Backtest = () => {
                 data-testid={`strategy-result-${s.strategy}`}
                 className={`p-6 border bg-[#0d0d10] ${i === 0 ? "border-amber-500/40 shadow-[0_0_30px_rgba(245,158,11,0.08)]" : "border-white/5"}`}
               >
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                   <div className="flex items-center gap-3">
                     {i === 0 && <Trophy className="w-5 h-5 text-amber-400" />}
                     <div>
@@ -139,15 +175,47 @@ const Backtest = () => {
                     </div>
                   ))}
                 </div>
-                <div className="flex flex-wrap gap-4 text-xs text-zinc-400">
+
+                {/* Gains breakdown */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t border-white/5">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Gains bruts</div>
+                    <div className="font-mono-tab font-semibold text-emerald-400">{s.gross_gains.toFixed(2)} €</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Coût grilles</div>
+                    <div className="font-mono-tab font-semibold text-red-400">-{s.total_cost.toFixed(2)} €</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Net</div>
+                    <div className={`font-mono-tab font-semibold ${s.net_gains >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {s.net_gains >= 0 ? "+" : ""}{s.net_gains.toFixed(2)} €
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">ROI</div>
+                    <div className={`font-mono-tab font-semibold ${s.roi_percent >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {s.roi_percent >= 0 ? "+" : ""}{s.roi_percent.toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-4 text-xs text-zinc-400 mt-3">
                   <span>Taux ≥3 bons : <span className="text-emerald-400 font-semibold">{s.hit_3plus_rate}%</span></span>
                   <span>Chance trouvée : <span className="text-amber-400 font-semibold">{s.chance_hit_rate}%</span></span>
                   <span>5+chance : <span className="text-red-400 font-semibold">{s.hits_5plus_chance}</span></span>
-                  <span>Total grilles testées : {s.grids_tested}</span>
                 </div>
               </Card>
             ))}
           </div>
+
+          <Card className="p-4 border-amber-500/20 bg-amber-500/[0.03]">
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              <strong className="text-amber-400">Note :</strong> les gains utilisent les rangs FDJ moyens
+              (Jackpot 5 000 000€, Rang 2 100 000€, Rang 3 1 000€, Rang 4 50€, Rang 5 20€, Rang 6 10€, Rang 7 5€, Rangs 8/9 2,20€).
+              Le vrai jackpot varie selon les cagnottes réelles. Ce chiffre reste une estimation théorique.
+            </p>
+          </Card>
         </>
       )}
     </div>

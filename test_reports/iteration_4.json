@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 4: 'Gains Backtest' feature (cumulative €/ROI in POST /api/backtest + UI chart & 4-col metrics). Backend 3/3 pytest gains tests pass + unit check of all 12 FDJ payout combinations matches spec exactly. Frontend Backtest page renders gains chart (15 bars = 5 strategies × 3 series: green/red/amber) and 4-column breakdown (Gains bruts emerald, Coût red, Net & ROI red for negative). FDJ payout disclaimer card present. Full 11-route navigation sweep: 0 pageerrors (insertBefore regression still clean). Real FDJ 1048-draw dataset produced expected all-negative ROI (-79% to -80%).",
+  "tested_scope": ["backend", "frontend", "integration", "regression"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "passed": [
+    "Unit check of _grid_payout / _payout_rank: all 12 combos correct (5+ch=5M€, 5=100k€, 4+ch=1k€, 4=50€, 3+ch=20€, 3=10€, 2+ch=5€, 2=2.20€, 0/1+ch=2.20€, else 0€). FDJ_GRID_COST=2.20€.",
+    "POST /api/backtest response includes top-level grid_cost=2.20 and payout_table = FDJ_PAYOUTS dict (10 entries).",
+    "Each of 5 strategies exposes gross_gains, total_cost, net_gains, roi_percent (all floats). total_cost == round(grids_tested * 2.20, 2). net_gains == round(gross_gains - total_cost, 2). roi_percent == round(net/cost*100, 2). Verified within 0.01€/0.05% tolerance.",
+    "Frontend /dashboard/backtest: 'Lancer le backtest' → renders 'Résultats' card + 'Gains cumulés (€)' card (data-testid=gains-chart) with 15 recharts bar rectangles (5 strats × 3 series Gains bruts / Coût / Net).",
+    "Per-strategy card shows 4-column grid (Gains bruts emerald, Coût grilles red -X.XX€, Net colored, ROI colored) — all 5 strategies rendered with negative net (mathematically expected on real data).",
+    "FDJ payout disclaimer card at bottom contains '5 000 000€' jackpot amount.",
+    "Header shows '{sample_size} tirages · {grids_per_strategy} grilles/strat · 2.2€/grille' correctly formatted.",
+    "Regression: 11-route sidebar sweep (overview→history→stats→hot-cold→heatmap→generator→backtest→verify→grids→alerts→data) produced 0 pageerrors, 0 insertBefore/NotFoundError.",
+    "Regression: /dashboard/grids page still renders (result panel + pending states)."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_backtest_gains.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iter4.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~1130 lines — still recommend splitting into modules (auth/draws/stats/backtest/alerts). Non-blocking, previously flagged.",
+    "In /backtest, the 'random' baseline strategy hardcodes wc={n:1} instead of using history chance freq — intentional to keep it truly random, but worth a code comment for future maintainers.",
+    "roi_percent could be undefined-behavior if grids_tested==0; endpoint clamps to sample>=20 and grids>=5, so cost>0 always in practice. Guard `if cost else 0.0` already present — good.",
+    "FDJ_PAYOUTS jackpot 5M€ is a fixed constant; real FDJ jackpots vary 2M-30M. The disclaimer text calls this out explicitly, so acceptable.",
+    "Backtest.jsx: 'Coût' bar uses negative value trick to render below zero — clean visual solution. Tooltip formatter uses `${v.toFixed(2)} €` which shows the negative sign correctly."
+  ],
+  "updated_files": ["/app/backend/tests/test_backtest_gains.py"],
+  "success_rate": {"backend": "100% (3/3 new + 12/12 payout unit combos + 14/14 cumulative)", "frontend": "100% of tested flows"},
+  "test_credentials": "session_token=test_fdj_1784196939161 (test-fdj user, 1048 FDJ draws pre-imported). Cookie or Bearer both work.",
+  "seed_data_creation": "None (used existing 1048-draw FDJ dataset).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Gains feature is production-ready. Backend enrichment (gross_gains/total_cost/net_gains/roi_percent + top-level grid_cost/payout_table) mathematically verified. UI renders gains chart + 4-col metrics. To rerun: TEST_TOKEN=test_fdj_1784196939161 REACT_APP_BACKEND_URL=<url> pytest backend/tests/test_backtest_gains.py -v. Negative ROI on real data is expected (loto has -50% expected value; small samples with rare jackpot make it -75% to -90%). Do NOT flag negative ROI as a bug.",
+  "rca_of_the_issue": "N/A — feature addition, no bugs found."
+}

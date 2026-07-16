@@ -632,6 +632,26 @@ def _payout_rank(main_matches: int, chance_match: bool) -> str:
     return "Perdu"
 
 
+# FDJ Loto average payouts (in euros). Rang 1 is variable — use realistic average.
+FDJ_PAYOUTS = {
+    "Rang 1 · Jackpot": 5_000_000.0,
+    "Rang 2": 100_000.0,
+    "Rang 3": 1_000.0,
+    "Rang 4": 50.0,
+    "Rang 5": 20.0,
+    "Rang 6": 10.0,
+    "Rang 7": 5.0,
+    "Rang 8": 2.20,
+    "Rang 9 · N° Chance": 2.20,
+    "Perdu": 0.0,
+}
+FDJ_GRID_COST = 2.20  # cost per grid in euros
+
+
+def _grid_payout(main_matches: int, chance_match: bool) -> float:
+    return FDJ_PAYOUTS.get(_payout_rank(main_matches, chance_match), 0.0)
+
+
 class VerifyGridRequest(BaseModel):
     numbers: List[int]
     chance: int
@@ -831,6 +851,7 @@ async def backtest(payload: BacktestRequest, user: User = Depends(get_current_us
         "rank_hist": [0] * 6,   # index = main matches (0..5)
         "hits_3plus": 0,
         "hits_5plus_chance": 0,
+        "gross_gains": 0.0,
     } for s in strategies}
 
     for k in range(start_idx, total - 1):
@@ -852,11 +873,15 @@ async def backtest(payload: BacktestRequest, user: User = Depends(get_current_us
                         r["hits_5plus_chance"] += 1
                 if matches >= 3:
                     r["hits_3plus"] += 1
+                r["gross_gains"] += _grid_payout(matches, chance == actual_chance)
 
     summary = []
     for s in strategies:
         r = results[s]
         gt = r["grids_tested"] or 1
+        cost = r["grids_tested"] * FDJ_GRID_COST
+        net = r["gross_gains"] - cost
+        roi = (net / cost * 100) if cost else 0.0
         summary.append({
             "strategy": s,
             "grids_tested": r["grids_tested"],
@@ -865,6 +890,10 @@ async def backtest(payload: BacktestRequest, user: User = Depends(get_current_us
             "hit_3plus_rate": round(r["hits_3plus"] / gt * 100, 2),
             "rank_distribution": r["rank_hist"],
             "hits_5plus_chance": r["hits_5plus_chance"],
+            "gross_gains": round(r["gross_gains"], 2),
+            "total_cost": round(cost, 2),
+            "net_gains": round(net, 2),
+            "roi_percent": round(roi, 2),
         })
     summary.sort(key=lambda x: x["avg_main_matches"], reverse=True)
 
@@ -872,6 +901,8 @@ async def backtest(payload: BacktestRequest, user: User = Depends(get_current_us
         "total_draws": total,
         "sample_size": sample,
         "grids_per_strategy": n_grids,
+        "grid_cost": FDJ_GRID_COST,
+        "payout_table": FDJ_PAYOUTS,
         "strategies": summary,
     }
 
