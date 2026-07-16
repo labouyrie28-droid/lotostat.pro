@@ -1,0 +1,108 @@
+{
+  "theme": "dark",
+  "archetype": "High-Contrast Swiss & Premium Data Analytics",
+  "colors": {
+    "background": "#050507",
+    "surface": "#121215",
+    "surface_elevated": "#1A1A1E",
+    "border": "#27272A",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "accents": {
+      "hot": "#EF4444",
+      "cold": "#0EA5E9",
+      "balanced": "#10B981",
+      "chance": "#F59E0B"
+    },
+    "gradients": {
+      "banned": ["purple", "violet"],
+      "allowed": "Use strictly translucent radial gradients for subtle glow effects behind key numbers, e.g., bg-red-500/10 with blur."
+    }
+  },
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "IBM Plex Sans",
+    "number_font": "JetBrains Mono",
+    "rules": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tighter",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight",
+      "numbers": "font-mono tracking-tight",
+      "labels": "text-xs font-bold uppercase tracking-[0.2em] text-zinc-500"
+    }
+  },
+  "visual_enhancers": {
+    "lottery_balls": {
+      "main_1_49": "w-12 h-12 rounded-full border border-zinc-700 bg-zinc-900 flex items-center justify-center font-mono text-lg shadow-[inset_0_2px_10px_rgba(255,255,255,0.05)] transition-transform hover:-translate-y-1",
+      "hot_state": "border-red-500 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2),inset_0_2px_10px_rgba(255,255,255,0.1)]",
+      "cold_state": "border-sky-500 text-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.2),inset_0_2px_10px_rgba(255,255,255,0.1)]",
+      "chance_1_10": "w-12 h-12 rounded-full border-2 border-amber-500 bg-amber-500/10 flex items-center justify-center font-mono text-lg text-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.2)]"
+    },
+    "surfaces": "Use True Grey base (#050507). Cards should be borderless or use a 1px border-white/5. Avoid heavy shadows; use lightness for elevation.",
+    "glassmorphism": "Sticky headers should use backdrop-blur-xl bg-black/60 with a bottom border-white/10."
+  },
+  "layouts": {
+    "dashboard_grid": "High-density Bento Grid. grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-6. Use col-span-2 for charts, col-span-1 for summary widgets.",
+    "spacing": "Generous spacing. Use p-6 or p-8 inside cards. Section gaps should be py-16 or py-24.",
+    "alignment": "Left-align dense data and labels. Center-align empty states and primary CTAs."
+  },
+  "components": {
+    "cards": "Flat solid surfaces (#121215) with 1px border (#27272A). Add subtle hover lift (-translate-y-1) for interactive cards like 'Mes grilles'.",
+    "charts": "Use Shadcn chart / Recharts. Dark-first design: bright thin lines, translucent fills (e.g., fill-sky-500/20). Hide grid lines or make them extremely subtle (stroke-white/5).",
+    "buttons": "Pill-shaped (rounded-full). Primary action uses accent color (e.g., amber for generation) with black text. Secondary actions use surface elevated with white text.",
+    "generator_controls": "Use Shadcn slider or toggle groups for strategy selection (Hot/Cold/Balanced/Random)."
+  },
+  "motion": {
+    "transitions": "Specific transitions only. transition-transform duration-200 ease-out for hover lifts. transition-colors duration-200 for buttons.",
+    "entrance": "Staggered fade-up for bento grid items using Framer Motion.",
+    "data_update": "Number ticker animations for stats updates if possible."
+  },
+  "accessibility": {
+    "contrast": "Ensure text meets APCA/WCAG AA standards against true grey backgrounds.",
+    "interactive": "Include hover and focus states for all interactive elements. focus:ring-2 focus:ring-amber-500 focus:outline-none.",
+    "testing": "All interactive elements MUST include a 'data-testid' attribute (e.g., data-testid=\"generate-grid-button\")."
+  },
+  "media": {
+    "images": [
+      {
+        "url": "https://images.pexels.com/photos/27141316/pexels-photo-27141316.jpeg",
+        "description": "Close-up of futuristic graphs and data analytics. Use as a heavily darkened hero background image on the landing page (bg-black/80 overlay).",
+        "category": "landing_hero"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1633547136747-8eece919638c",
+        "description": "Abstract white spheres floating. Use as a subtle decorative background in the 'Générateur de grilles' section with very low opacity (opacity-10).",
+        "category": "generator_background"
+      }
+    ]
+  },
+  "3d_libraries": {
+    "charts": "Recharts (via Shadcn ui). Use for Frequency Bar Charts, Delay Area Charts.",
+    "heatmap": "Custom grid using Tailwind or Recharts ScatterChart to show pair frequencies."
+  },
+  "instructions_to_main_agent": [
+    "Build a Next.js/React app with Tailwind CSS and Shadcn UI.",
+    "Create a landing page with a hero section using the provided analytics image with a dark overlay, and a 'Connexion Google' button.",
+    "Implement the Dashboard with progressive disclosure: North Star metrics at top, detailed charts below.",
+    "Build 'Historique des tirages' view: A table displaying dates, 5 main numbers, and 1 chance number.",
+    "Build 'Statistiques' view: Bar charts for frequencies, a heatmap for pairs, and delay metrics. Use Recharts with bright lines and dark backgrounds.",
+    "Build 'Numéros chauds/froids' view: Render the lottery balls using the exact Tailwind classes defined in visual_enhancers.lottery_balls.",
+    "Build 'Générateur de grilles' view: Include strategy selectors and a prominent generate button. Render the generated grids clearly.",
+    "Build 'Mes grilles' view: Display saved grids as bento cards with generation date and strategy used.",
+    "Mock the authentication (Emergent Auth) and CSV import logic for now, but provide the UI for them.",
+    "Include a 'Générer données de démo 3 ans' button that populates mock data."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy and lightness (not shadows in dark mode).",
+    "You MUST NOT apply universal transition (e.g., transition: all). Add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add '.App { text-align: center; }' in the css file.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons. Use Phosphor Icons or Lucide.",
+    "Every interaction needs micro-animations - hover states, transitions, and entrance animations.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "DO NOT use complete transparent background in header, overlays, any surface that has content under it. Example: Dropdown with transparent background.",
+    "All interactive and key informational elements MUST include a data-testid attribute to facilitate robust automated testing."
+  ]
+}
