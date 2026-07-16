@@ -213,19 +213,33 @@ const SingleResult = ({ result }) => (
           <LotteryBall number={result.grid.chance} variant="chance" size="sm" />
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        {result.distribution.map((d) => {
-          const pct = ((d.count / result.total_draws) * 100).toFixed(1);
-          return (
-            <div key={d.main_matches} className="p-4 rounded-lg border border-white/5 bg-black/30">
-              <div className="text-[10px] uppercase text-zinc-500 mb-1">{d.main_matches} num</div>
-              <div className="font-heading text-2xl font-bold" data-testid={`match-${d.main_matches}`}>{d.count}</div>
-              <div className="text-[10px] text-zinc-500 mt-1">{pct}%</div>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              {result.distribution.map((d) => {
+                const pct = ((d.count / result.total_draws) * 100).toFixed(1);
+                // Espérance théorique binomiale : C(5,k)*C(44,5-k)/C(49,5)
+                const binom = [1086008, 678755, 132440, 9460, 220, 1][d.main_matches];
+                const expected = (binom / 1906884) * result.total_draws;
+                const delta = d.count - expected;
+                const deltaColor = Math.abs(delta) < 5 ? "text-zinc-500" : delta > 0 ? "text-emerald-400" : "text-red-400";
+                return (
+                  <div key={d.main_matches} className="p-4 rounded-lg border border-white/5 bg-black/30">
+                    <div className="text-[10px] uppercase text-zinc-500 mb-1">{d.main_matches} num</div>
+                    <div className="font-heading text-2xl font-bold" data-testid={`match-${d.main_matches}`}>{d.count}</div>
+                    <div className="text-[10px] text-zinc-500 mt-1">{pct}%</div>
+                    <div className={`text-[10px] mt-1 font-mono-tab ${deltaColor}`}>
+                      {delta > 0 ? "+" : ""}{delta.toFixed(1)} vs théorique
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
-    </Card>
+            <p className="text-[11px] text-zinc-500 mt-4 leading-relaxed">
+              <strong className="text-amber-400">Note :</strong> les valeurs sont proches d'une grille à l'autre car
+              chaque grille de loto a exactement la même probabilité mathématique. Un delta vert = au-dessus des
+              attentes théoriques, rouge = en-dessous. Regardez plutôt "Meilleurs coups" ci-dessous — ils varient
+              vraiment selon les numéros joués.
+            </p>
+          </Card>
 
     <Card className="p-8 border-white/5 bg-[#0d0d10]">
       <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-1">Rangs FDJ atteints</div>

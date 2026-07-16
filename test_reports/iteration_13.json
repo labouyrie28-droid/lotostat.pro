@@ -1,0 +1,19 @@
+{
+  "summary": "Iteration 13 — Verify Grille UX fix (delta vs théorique). Backend /grids/verify returns distinct distributions per grid (confirmed via curl on user with 1048 draws: Grid [1..5]+1 -> [603,370,72,3,0,0], Grid [7,13,22,31,46]+5 -> [574,378,87,9,0,0]). Frontend now renders three lines per dist card (count / percent / '±X.X vs théorique') with color coding (emerald>+5, red<-5, zinc otherwise) plus explanatory note referencing 'Meilleurs coups'. UI verified end-to-end via Playwright: deltas differ between the two grids and match the binomial theoretical baseline C(5,k)*C(44,5-k)/C(49,5) * 1048. Batch (multi-grid) mode still works.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Binomial constants hardcoded in Verify.jsx line 220 ([1086008,678755,132440,9460,220,1] / 1906884). If the loto rules change (e.g., 5/50 or extra ball) this must be updated in two places (backend distribution logic AND this UI constant). Consider exposing 'expected' from the /grids/verify endpoint response so the frontend is agnostic.",
+    "server.py still ~1627 lines — refactor recommended (carried over from iter12)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Injected ephemeral session on existing seeded user test-fdj-1784196939161 (1048 draws). Session cleaned up post-test.",
+  "seed_data_creation": "None — reused existing seeded draws.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Verify page now shows delta vs theoretical binomial expectation. UI-only fix — backend unchanged. If you need to re-test, inject a session cookie on preview host for any user_id that has draws (e.g., test-fdj-1784196939161 has 1048 draws). Playwright must set cookie with secure=True, sameSite='None'.",
+  "rca of the issue": "Not a real bug — /grids/verify has always returned distinct data per grid. User perceived 'same statistics' because raw distribution counts across loto grids are mathematically clustered around the uniform binomial expectation (~597/373/73/5/0/0 on 1048 draws). Mitigation: added ±delta-vs-théorique line + explanatory note, redirecting attention to 'Meilleurs coups' section which varies significantly per grid."
+}
