@@ -19,6 +19,7 @@ import Heatmap from "@/pages/views/Heatmap";
 import Alerts from "@/pages/views/Alerts";
 import Verify from "@/pages/views/Verify";
 import Wheel from "@/pages/views/Wheel";
+import SharedGrid from "@/pages/SharedGrid";
 
 const AppRoutes = () => {
   const location = useLocation();
@@ -28,6 +29,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/share/:token" element={<SharedGrid />} />
       <Route path="/dashboard" element={<Dashboard />}>
         <Route index element={<Overview />} />
         <Route path="history" element={<History />} />
@@ -55,18 +57,39 @@ const AppRoutes = () => {
 class RootErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, retries: 0, lastError: null };
   }
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, lastError: error };
   }
   componentDidCatch(error, info) {
-    // Log once. Auto-recover on next tick.
     // eslint-disable-next-line no-console
-    console.warn("[Root recovery]", error?.message);
-    setTimeout(() => this.setState({ hasError: false }), 50);
+    console.error("[Root recovery]", error?.message, error?.stack, info?.componentStack);
+    // Only auto-recover for the first 2 crashes to avoid infinite loop
+    if (this.state.retries < 2) {
+      setTimeout(() => this.setState((s) => ({ hasError: false, retries: s.retries + 1 })), 100);
+    }
   }
   render() {
+    if (this.state.hasError && this.state.retries >= 2) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#050507] px-6">
+          <div className="max-w-md text-center">
+            <div className="text-4xl mb-3">🛠</div>
+            <div className="text-lg font-heading font-semibold mb-2">Une erreur est survenue</div>
+            <div className="text-xs text-zinc-500 mb-4 font-mono-tab">
+              {this.state.lastError?.message || "Erreur inconnue"}
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-full bg-amber-400 text-black font-semibold px-6 py-2 text-sm"
+            >
+              Recharger la page
+            </button>
+          </div>
+        </div>
+      );
+    }
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-[#050507]">

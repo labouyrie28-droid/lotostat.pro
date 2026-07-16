@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { LotteryBall } from "@/components/LotteryBall";
 import { toast } from "sonner";
-import { Loader2, Trash2, Bookmark, Trophy, Target, Clock } from "lucide-react";
+import { Loader2, Trash2, Bookmark, Trophy, Target, Clock, Share2, Link as LinkIcon, Mail, Copy, Check } from "lucide-react";
 
 const strategyLabels = {
   hot: "Chauds", cold: "Froids", balanced: "Équilibrée", weighted_random: "Aléatoire pondérée",
+  credible_top5: "Top 5 crédibles",
 };
 
 const rankColor = (rank) => {
@@ -24,6 +27,13 @@ const rankColor = (rank) => {
 const MyGrids = () => {
   const [grids, setGrids] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareGrid, setShareGrid] = useState(null);
+  const [shareLink, setShareLink] = useState("");
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareMessage, setShareMessage] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -40,6 +50,44 @@ const MyGrids = () => {
       toast.success("Grille supprimée");
       await load();
     } catch { toast.error("Impossible de supprimer"); }
+  };
+
+  const openShare = async (g) => {
+    setShareGrid(g);
+    setShareEmail("");
+    setShareMessage("");
+    setCopied(false);
+    setShareOpen(true);
+    try {
+      const { data } = await api.post("/grids/share", { grid_id: g.id });
+      const url = `${window.location.origin}/share/${data.token}`;
+      setShareLink(url);
+    } catch { toast.error("Impossible de créer le lien"); setShareOpen(false); }
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      toast.success("Lien copié !");
+      setTimeout(() => setCopied(false), 2000);
+    } catch { toast.error("Copie manuelle nécessaire"); }
+  };
+
+  const sendEmail = async () => {
+    if (!shareEmail || !shareGrid) return;
+    setSending(true);
+    try {
+      await api.post("/grids/share-email", {
+        grid_id: shareGrid.id,
+        to_email: shareEmail,
+        message: shareMessage || null,
+      });
+      toast.success(`Email envoyé à ${shareEmail}`);
+      setShareOpen(false);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Envoi échoué");
+    } finally { setSending(false); }
   };
 
   return (
@@ -81,14 +129,24 @@ const MyGrids = () => {
                       <LotteryBall number={g.chance} variant="chance" size="md" />
                     </div>
                   </div>
-                  <Button
-                    data-testid={`delete-grid-${g.id}`}
-                    variant="ghost"
-                    onClick={() => remove(g.id)}
-                    className="text-zinc-400 hover:text-red-400 hover:bg-red-500/10 gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" /> Supprimer
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      data-testid={`share-grid-${g.id}`}
+                      variant="ghost"
+                      onClick={() => openShare(g)}
+                      className="text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10 gap-2"
+                    >
+                      <Share2 className="w-4 h-4" /> Partager
+                    </Button>
+                    <Button
+                      data-testid={`delete-grid-${g.id}`}
+                      variant="ghost"
+                      onClick={() => remove(g.id)}
+                      className="text-zinc-400 hover:text-red-400 hover:bg-red-500/10 gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" /> Supprimer
+                    </Button>
+                  </div>
                 </div>
 
                 {r ? (
@@ -145,6 +203,82 @@ const MyGrids = () => {
           })}
         </div>
       )}
+
+      {/* Share dialog */}
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent className="bg-[#0d0d10] border-white/10 text-white" data-testid="share-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl">Partager la grille</DialogTitle>
+            <DialogDescription className="text-zinc-500">
+              Envoie le lien à un proche ou par email direct.
+            </DialogDescription>
+          </DialogHeader>
+
+          {shareGrid && (
+            <div className="flex flex-wrap items-center gap-2 pb-4 border-b border-white/5">
+              {shareGrid.numbers.map((n) => <LotteryBall key={n} number={n} size="sm" />)}
+              <div className="mx-1 text-zinc-700">+</div>
+              <LotteryBall number={shareGrid.chance} variant="chance" size="sm" />
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2">
+              <LinkIcon className="w-3 h-3" /> Lien de partage
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                data-testid="share-link-input"
+                readOnly
+                value={shareLink}
+                className="bg-black/30 border-white/10 font-mono-tab text-xs"
+              />
+              <Button
+                data-testid="copy-link-btn"
+                onClick={copyLink}
+                variant="outline"
+                className="rounded-full border-white/10 shrink-0 gap-2"
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copied ? "Copié" : "Copier"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-4 border-t border-white/5">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2">
+              <Mail className="w-3 h-3" /> Envoyer par email
+            </div>
+            <Input
+              data-testid="share-email-input"
+              type="email"
+              placeholder="destinataire@exemple.com"
+              value={shareEmail}
+              onChange={(e) => setShareEmail(e.target.value)}
+              className="bg-black/30 border-white/10"
+            />
+            <Input
+              data-testid="share-message-input"
+              placeholder="Message optionnel (ex: joue avec moi cette semaine !)"
+              value={shareMessage}
+              onChange={(e) => setShareMessage(e.target.value)}
+              className="bg-black/30 border-white/10 text-sm"
+            />
+            <Button
+              data-testid="send-share-email-btn"
+              onClick={sendEmail}
+              disabled={sending || !shareEmail}
+              className="w-full rounded-full bg-amber-400 hover:bg-amber-300 text-black font-semibold gap-2"
+            >
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              Envoyer
+            </Button>
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              Note : sans domaine vérifié sur resend.com, les emails ne partent qu'à l'adresse du compte Resend.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

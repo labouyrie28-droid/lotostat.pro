@@ -1085,6 +1085,110 @@ async def delete_grid(grid_id: str, user: User = Depends(get_current_user)):
     return {"deleted": res.deleted_count}
 
 
+# --------- Share ---------
+
+class ShareCreateRequest(BaseModel):
+    grid_id: str
+
+
+class ShareByEmailRequest(BaseModel):
+    grid_id: str
+    to_email: str
+    message: Optional[str] = None
+
+
+@api_router.post("/grids/share")
+async def create_share(payload: ShareCreateRequest, user: User = Depends(get_current_user)):
+    """Create a public share link (no auth) for a saved grid."""
+    grid = await db.saved_grids.find_one({"id": payload.grid_id, "user_id": user.user_id}, {"_id": 0})
+    if not grid:
+        raise HTTPException(404, "Grille introuvable")
+    # Check for existing share to avoid duplicates
+    existing = await db.grid_shares.find_one({"grid_id": payload.grid_id, "owner_id": user.user_id}, {"_id": 0})
+    if existing:
+        return {"token": existing["token"], "created_at": existing["created_at"]}
+    token = uuid.uuid4().hex[:12]
+    await db.grid_shares.insert_one({
+        "token": token,
+        "grid_id": payload.grid_id,
+        "owner_id": user.user_id,
+        "owner_name": user.name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"token": token, "created_at": datetime.now(timezone.utc).isoformat()}
+
+
+@api_router.get("/share/{token}")
+async def get_shared_grid(token: str):
+    """Public endpoint (no auth) — returns a grid via share token."""
+    share = await db.grid_shares.find_one({"token": token}, {"_id": 0})
+    if not share:
+        raise HTTPException(404, "Lien de partage invalide ou expiré")
+    grid = await db.saved_grids.find_one({"id": share["grid_id"]}, {"_id": 0})
+    if not grid:
+        raise HTTPException(404, "La grille partagée n'existe plus")
+    return {
+        "numbers": grid["numbers"],
+        "chance": grid["chance"],
+        "strategy": grid["strategy"],
+        "created_at": grid["created_at"],
+        "shared_by": share.get("owner_name", "Un joueur"),
+        "shared_at": share["created_at"],
+    }
+
+
+@api_router.post("/grids/share-email")
+async def share_by_email(payload: ShareByEmailRequest, user: User = Depends(get_current_user)):
+    """Share a saved grid by email via Resend."""
+    if not RESEND_API_KEY or not resend:
+        raise HTTPException(503, "Service email non configuré. Ajoutez RESEND_API_KEY dans backend/.env.")
+    grid = await db.saved_grids.find_one({"id": payload.grid_id, "user_id": user.user_id}, {"_id": 0})
+    if not grid:
+        raise HTTPException(404, "Grille introuvable")
+    # Simple email regex
+    import re
+    if not re.match(r"^[\w\.\-\+]+@[\w\-]+\.[\w\.\-]+$", payload.to_email):
+        raise HTTPException(400, "Adresse email invalide")
+
+    balls_html = ""
+    for n in grid["numbers"]:
+        balls_html += (
+            f'<span style="display:inline-block;width:34px;height:34px;line-height:34px;border-radius:50%;'
+            f'background:#111;color:#fff;font-family:monospace;font-weight:600;text-align:center;margin-right:6px;'
+            f'border:1px solid #333;">{n}</span>'
+        )
+    balls_html += (
+        f'<span style="display:inline-block;width:34px;height:34px;line-height:34px;border-radius:50%;'
+        f'background:rgba(245,158,11,0.15);color:#F59E0B;font-family:monospace;font-weight:700;text-align:center;'
+        f'margin-left:6px;border:2px solid #F59E0B;">{grid["chance"]}</span>'
+    )
+    message_html = f'<p style="color:#333;font-style:italic;">"{payload.message}"</p>' if payload.message else ""
+    html = f"""
+    <html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:32px;margin:0;">
+      <table style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">
+        <tr><td>
+          <div style="font-size:12px;color:#F59E0B;text-transform:uppercase;letter-spacing:3px;margin-bottom:8px;">LotoStat.Pro</div>
+          <h1 style="font-size:22px;margin:0 0 8px 0;color:#111;">{user.name} vous partage une grille</h1>
+          {message_html}
+          <div style="margin:24px 0;">{balls_html}</div>
+          <p style="font-size:12px;color:#888;">Stratégie : {grid["strategy"]}</p>
+        </td></tr>
+      </table>
+    </body></html>
+    """
+    try:
+        result = await asyncio.to_thread(resend.Emails.send, {
+            "from": SENDER_EMAIL,
+            "to": [payload.to_email],
+            "subject": f"🎯 {user.name} vous partage une grille Loto",
+            "html": html,
+        })
+        return {"status": "sent", "to": payload.to_email, "email_id": result.get("id")}
+    except Exception as e:
+        logger.error(f"Share-email error: {e}")
+        raise HTTPException(500, f"Échec envoi : {e}")
+
+
 # --------- Health ---------
 
 @api_router.get("/")
