@@ -13,7 +13,7 @@ const History = () => {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get("/draws?limit=1000");
+        const { data } = await api.get("/draws?limit=1500");
         setDraws(data);
       } finally { setLoading(false); }
     })();

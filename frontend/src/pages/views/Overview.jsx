@@ -16,7 +16,7 @@ const Overview = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/draws?limit=500");
+      const { data } = await api.get("/draws?limit=1500");
       setDraws(data);
     } finally { setLoading(false); }
   };

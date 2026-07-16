@@ -54,7 +54,7 @@ class SavedGrid(BaseModel):
 
 
 class GenerateGridRequest(BaseModel):
-    strategy: Literal["hot", "cold", "balanced", "weighted_random"]
+    strategy: Literal["hot", "cold", "balanced", "weighted_random", "credible_top5"]
     count: int = 1
 
 
@@ -643,6 +643,75 @@ async def generate_grid(payload: GenerateGridRequest, user: User = Depends(get_c
             pool.pop(idx_n)
             weights.pop(idx_n)
         return sorted(chosen)
+
+    # --- Credible Top-5 strategy: generate 10 weighted_random candidates,
+    #     score them by "statistical credibility" (proximity to real-draw patterns), keep top 5.
+    if payload.strategy == "credible_top5":
+        import math
+        # Historical distributions used to score credibility
+        all_sums = [sum(d["numbers"]) for d in draws]
+        hist_sum_mean = sum(all_sums) / len(all_sums) if all_sums else 125
+        hist_sum_sigma = math.sqrt(sum((s - hist_sum_mean) ** 2 for s in all_sums) / max(1, len(all_sums))) if all_sums else 30
+
+        even_counts = [sum(1 for n in d["numbers"] if n % 2 == 0) for d in draws]
+        hist_even_mean = sum(even_counts) / len(even_counts) if even_counts else 2.5
+        hist_even_sigma = 1.1  # theoretical std for binomial
+
+        weights_main = {n: main_freq.get(n, 0) + 1 for n in range(1, 50)}
+        weights_chance = {n: chance_freq.get(n, 0) + 1 for n in range(1, 11)}
+
+        def credibility(nums):
+            s = sum(nums)
+            evens = sum(1 for n in nums if n % 2 == 0)
+            # 1. Sum near historical mean (Gaussian score)
+            sum_score = math.exp(-((s - hist_sum_mean) ** 2) / (2 * hist_sum_sigma ** 2))
+            # 2. Parity near historical mean
+            parity_score = math.exp(-((evens - hist_even_mean) ** 2) / (2 * hist_even_sigma ** 2))
+            # 3. Range spread: check how many of the 5 decades are covered
+            decades = {(n - 1) // 10 for n in nums}
+            spread_score = len(decades) / 5.0
+            # 4. Frequency likelihood: mean normalized frequency
+            freq_score = sum(main_freq.get(n, 0) / max(1, sum(main_freq.values())) for n in nums)
+            # 5. Avoid consecutive-heavy grids
+            sorted_nums = sorted(nums)
+            consec = sum(1 for i in range(4) if sorted_nums[i + 1] - sorted_nums[i] == 1)
+            consec_penalty = max(0, 1 - consec * 0.15)
+            return sum_score * parity_score * spread_score * consec_penalty * (1 + freq_score)
+
+        POOL_SIZE = 10
+        TOP_N = 5
+        candidates = []
+        seen = set()
+        attempts = 0
+        while len(candidates) < POOL_SIZE and attempts < POOL_SIZE * 4:
+            attempts += 1
+            nums = pick_by_weights(weights_main, 5)
+            key = tuple(nums)
+            if key in seen:
+                continue
+            seen.add(key)
+            chance_n = pick_by_weights(weights_chance, 1)[0]
+            score = credibility(nums)
+            candidates.append({
+                "numbers": nums,
+                "chance": chance_n,
+                "score": round(score, 4),
+                "sum": sum(nums),
+                "evens": sum(1 for n in nums if n % 2 == 0),
+            })
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+        top = candidates[:TOP_N]
+        for g in top:
+            g["strategy"] = "credible_top5"
+        return {
+            "grids": top,
+            "pool_size": len(candidates),
+            "credibility_stats": {
+                "hist_sum_mean": round(hist_sum_mean, 1),
+                "hist_sum_sigma": round(hist_sum_sigma, 1),
+                "hist_even_mean": round(hist_even_mean, 2),
+            },
+        }
 
     grids = []
     for _ in range(max(1, min(10, payload.count))):

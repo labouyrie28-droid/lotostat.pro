@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 8 fully validated. New 'credible_top5' strategy end-to-end: POST /api/grids/generate {strategy:'credible_top5'} returns pool_size=10, exactly 5 grids sorted by score desc, each grid has {numbers,chance,score,sum,evens,strategy='credible_top5'}, credibility_stats.hist_sum_mean=124.7 (real FDJ 1048 draws), hist_even_mean≈2.44. Sample avg grid sum stays within 40 of hist mean. Regression: hot/cold/balanced/weighted_random still return count grids with correct strategy field; unknown strategy → 422; 'credible_top5' literal accepted (no 422). Draws limit: default returns 500, ?limit=1500 returns all 1048. Frontend /dashboard/generator: 5 strategy cards visible, 'Top 5 crédibles' violet with 'RECOMMANDÉ' badge and default-selected; count buttons hidden with credible_top5 (info text '10 candidates générés · scoring crédibilité · top 5 retournés' shown) and appear when other strategies selected. Générer with credible_top5 shows violet 'Scoring de crédibilité' meta card + 5 grid cards each with Crédibilité % (e.g. 77.6%). Switching to 'hot' + Générer shows 3 plain grids without credibility card/percent. Overview page displays 1048 (limit fix confirmed).",
+  "tested_scope": ["backend", "frontend", "regression"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "passed": [
+    "POST /grids/generate credible_top5 → 200, pool_size=10, 5 grids sorted score desc, hist_sum_mean≈124.7, hist_even_mean≈2.4",
+    "Each credible_top5 grid: numbers(5,1-49), chance(1-10), sum,evens,score,strategy fields present and consistent",
+    "Sample grid sums stay within 40 of historical mean (scoring bias evidence)",
+    "Regression: hot/cold/balanced/weighted_random return correct count and strategy label",
+    "Unknown strategy rejected 422; credible_top5 accepted (not 422)",
+    "GET /draws default → 500 rows; GET /draws?limit=1500 → 1048 rows",
+    "Frontend: 5 strategy cards render with data-testid=strategy-{key}; RECOMMANDÉ badge on credible_top5",
+    "Frontend: default strategy=credible_top5, count buttons hidden, info text shown",
+    "Frontend: clicking 'hot' shows count buttons; clicking 'credible_top5' hides them again",
+    "Frontend: Générer with credible_top5 → 5 generated-grid-* cards + credibility-meta card + Crédibilité % per grid (77.6% etc.)",
+    "Frontend: Générer with hot → 3 grids, no credibility-meta, no % shown",
+    "Frontend: /dashboard displays 1048 (limit=1500 fix confirmed)"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iter8.py",
+    "/app/test_reports/pytest/iter8.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1403 lines — still monolithic. Splitting /grids, /draws, /stats routers into separate modules recommended (deferred from iter 6/7).",
+    "credible_top5 branch uses local 'import math' inside the endpoint — move to module-level imports.",
+    "GET /draws hard-caps at limit param with no server-side ceiling; frontend passes 1500 which is fine today, but consider enforcing max_limit=2000 on backend to prevent accidental huge fetches.",
+    "credible_top5 candidate loop caps at POOL_SIZE*4=40 attempts to dedupe — with 1048 draws this is safe; document the fallback (may return <10 candidates in pathological cases)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter8.py", "/app/test_reports/iteration_8.json"],
+  "success_rate": {"backend": "100% (11/11 pytest)", "frontend": "100% (all Generator+Overview flows)"},
+  "test_credentials": "Bearer test_fdj_1784196939161 (1048 real FDJ draws)",
+  "seed_data_creation": "None — reused existing test user",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 8 credible_top5 strategy + /draws limit fix fully pass. Reuse test_iter8.py for regression. Note that inner_text on the Crédibilité label reads as 'CRÉDIBILITÉ' due to CSS tracking-widest uppercasing — the % value is what matters (score*100 rounded to 1 decimal).",
+  "rca_of_the_issue": "N/A — no failures."
+}
