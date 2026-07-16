@@ -24,7 +24,14 @@ const Wheel = () => {
     })();
   }, []);
 
-  const applyPreset = (kind) => {
+  const applyPreset = async (kind) => {
+    if (kind === "credible") {
+      try {
+        const { data } = await api.get(`/stats/credible-pool?count=${poolSize}`);
+        setPool(data.pool);
+      } catch { toast.error("Impossible de charger les crédibles"); }
+      return;
+    }
     if (!hotColdData) return toast.error("Données non chargées");
     let src;
     if (kind === "hot") src = hotColdData.hot;
@@ -113,6 +120,9 @@ const Wheel = () => {
         <div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-3">Pré-remplir depuis les stats</div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button data-testid="preset-credible" variant="outline" size="sm" onClick={() => applyPreset("credible")} className="rounded-full border-violet-500/40 text-violet-400 hover:bg-violet-500/10 font-semibold">
+              ✨ Top {poolSize} crédibles
+            </Button>
             <Button data-testid="preset-hot" variant="outline" size="sm" onClick={() => applyPreset("hot")} className="rounded-full border-red-500/30 text-red-400 hover:bg-red-500/10">
               Top {poolSize} chauds
             </Button>

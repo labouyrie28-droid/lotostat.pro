@@ -511,6 +511,69 @@ async def stats_pairs(user: User = Depends(get_current_user)):
     return {"total_draws": total, "top_pairs": top_pairs, "top_triplets": top_triplets}
 
 
+@api_router.get("/stats/credible-pool")
+async def credible_pool(count: int = 8, user: User = Depends(get_current_user)):
+    """Retourne les `count` numéros qui apparaissent le plus dans les grilles crédibles.
+    Utile pour pré-remplir le pool du Système Réducteur avec des numéros 'crédibles'.
+    Méthode : génère 50 grilles crédibles via credible_top5, compte la fréquence de chaque
+    numéro, retourne les top `count` (avec fallback fréquence historique si égalité)."""
+    import math
+    from itertools import combinations as _c
+    draws = await _get_all_draws(user.user_id)
+    if not draws:
+        raise HTTPException(400, "Aucun tirage. Charge le dataset FDJ.")
+    count = max(6, min(count, 12))
+
+    # Réutilise la logique credible_top5 en mode batch (5 runs de top-5 = 25 grilles échantillons)
+    main_freq = Counter()
+    for d in draws:
+        for n in d["numbers"]:
+            main_freq[n] += 1
+    all_sums = [sum(d["numbers"]) for d in draws]
+    hist_sum_mean = sum(all_sums) / len(all_sums)
+    hist_sum_sigma = math.sqrt(sum((s - hist_sum_mean) ** 2 for s in all_sums) / len(all_sums)) or 1
+    even_counts = [sum(1 for n in d["numbers"] if n % 2 == 0) for d in draws]
+    hist_even_mean = sum(even_counts) / len(even_counts)
+
+    def cred(nums):
+        s = sum(nums)
+        evens = sum(1 for n in nums if n % 2 == 0)
+        sum_score = math.exp(-((s - hist_sum_mean) ** 2) / (2 * hist_sum_sigma ** 2))
+        parity_score = math.exp(-((evens - hist_even_mean) ** 2) / 2.42)
+        spread = len({(n - 1) // 10 for n in nums}) / 5.0
+        sorted_n = sorted(nums)
+        consec = sum(1 for i in range(4) if sorted_n[i+1] - sorted_n[i] == 1)
+        return sum_score * parity_score * spread * max(0, 1 - consec * 0.15)
+
+    weights_main = {n: main_freq.get(n, 0) + 1 for n in range(1, 50)}
+    number_appearance = Counter()
+    for _run in range(10):
+        candidates = []
+        seen = set()
+        for _ in range(20):
+            pool_local = list(weights_main.keys())
+            weights_local = [weights_main[n] for n in pool_local]
+            chosen = set()
+            while len(chosen) < 5 and pool_local:
+                n = random.choices(pool_local, weights=weights_local, k=1)[0]
+                chosen.add(n)
+                idx = pool_local.index(n)
+                pool_local.pop(idx)
+                weights_local.pop(idx)
+            key = tuple(sorted(chosen))
+            if key in seen: continue
+            seen.add(key)
+            candidates.append((cred(list(chosen)), list(chosen)))
+        candidates.sort(reverse=True)
+        for _, nums in candidates[:5]:
+            for n in nums:
+                number_appearance[n] += 1
+
+    # Sort by appearance, tie-break by historical frequency
+    ranked = sorted(range(1, 50), key=lambda n: (number_appearance[n], main_freq.get(n, 0)), reverse=True)
+    return {"pool": sorted(ranked[:count]), "count": count}
+
+
 @api_router.get("/stats/trend")
 async def stats_trend(window: int = 100, user: User = Depends(get_current_user)):
     """
