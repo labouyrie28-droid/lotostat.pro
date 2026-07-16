@@ -119,6 +119,14 @@ const Dashboard = () => {
           >
             <LogOut className="w-4 h-4" /> Déconnexion
           </Button>
+          <div
+            data-testid="signature-dashboard"
+            className="mt-4 pt-3 border-t border-white/5 text-center text-[9px] tracking-[0.2em] uppercase text-zinc-600 leading-relaxed"
+          >
+            © 2026<br />
+            <span className="text-amber-400/80 font-medium tracking-[0.15em]">Thomas Labouyrie</span><br />
+            Tous droits réservés
+          </div>
         </div>
       </aside>
 

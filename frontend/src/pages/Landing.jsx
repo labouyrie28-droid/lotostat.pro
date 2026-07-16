@@ -129,8 +129,16 @@ const Landing = () => {
         </div>
       </section>
 
-      <footer className="border-t border-white/5 py-10 text-center text-xs text-zinc-600 uppercase tracking-[0.2em]">
-        LotoStat.Pro · Analyse statistique — Le loto reste un jeu de hasard
+      <footer className="border-t border-white/5 py-10 text-center space-y-3">
+        <div className="text-xs text-zinc-600 uppercase tracking-[0.2em]">
+          LotoStat.Pro · Analyse statistique — Le loto reste un jeu de hasard
+        </div>
+        <div
+          data-testid="signature-landing"
+          className="text-[11px] tracking-[0.25em] uppercase text-zinc-500"
+        >
+          © 2026 <span className="text-amber-400/90 font-medium">Thomas Labouyrie</span> — Tous droits réservés
+        </div>
       </footer>
     </div>
   );

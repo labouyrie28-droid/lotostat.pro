@@ -85,6 +85,12 @@ const SharedGrid = () => {
         <p className="text-[10px] uppercase tracking-widest text-zinc-600 mt-8">
           Le loto reste un jeu de hasard · Aucune méthode ne garantit un gain
         </p>
+        <p
+          data-testid="signature-shared"
+          className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 mt-3"
+        >
+          © 2026 <span className="text-amber-400/80 font-medium">Thomas Labouyrie</span> — Tous droits réservés
+        </p>
       </Card>
     </div>
   );
