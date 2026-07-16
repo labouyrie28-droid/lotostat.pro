@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 7 fully validated: POST /api/grids/verify-batch works end-to-end with 3 grids on 1048 real FDJ draws (total_draws=1048, grids_count=3, per-grid distribution/avg_main_matches/gross_gain/hit_3plus/hit_2plus/per_rank all present, best.by_avg/by_gain/by_hits_3plus indices returned). Validation errors return 400 for empty list, >10 grids, and invalid grids (message 'Grille #N invalide'). /draws/load-official still works and delegates to _load_official_for_user (verified inserted>=1000). Auto-load code path in /auth/session confirmed by static inspection: count_documents==0 check + await _load_official_for_user(user_id) present. Frontend /dashboard/verify: single grid mode renders best-hits result on [7,13,22,31,46]+5; adding grids works up to 10 with the add button disabled at cap; remove-X appears only when >1 grid; batch mode with 3 grids renders batch-result with 3 trophy cards ('Meilleure moyenne', 'Meilleur gain', 'Meilleur hits 3+'), comparison bar chart, and 3 border-left-colored detail cards.",
+  "tested_scope": ["backend", "frontend", "regression"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Verify page — comparison bar chart", "issues": ["Recharts emits 'width(-1) and height(-1)' warning during initial mount of the batch comparison chart (cosmetic; chart still renders correctly). Consider wrapping ResponsiveContainer in a div with fixed minHeight or use aspect prop."]}
+    ]
+  },
+  "passed": [
+    "POST /api/grids/verify-batch with 3 valid grids → total_draws=1048, grids_count=3, results[i] has index/grid/distribution(len=6)/avg_main_matches/gross_gain/hit_3plus/hit_2plus/per_rank, best={by_avg,by_gain,by_hits_3plus} indices within range.",
+    "POST /api/grids/verify-batch empty list → 400.",
+    "POST /api/grids/verify-batch 11 grids → 400.",
+    "POST /api/grids/verify-batch invalid grid (50 out of range) → 400 with 'Grille #2 invalide'.",
+    "POST /api/draws/load-official → 200, inserted=1048.",
+    "Static check: /auth/session contains 'existing_draws = await db.draws.count_documents' + 'await _load_official_for_user(user_id)'; helper _load_official_for_user defined.",
+    "Frontend: /dashboard/verify renders with data-testid=verify-page; starts with grid-input-row-0 only (no row-1, no remove-grid-0).",
+    "Frontend: fill [7,13,22,31,46]+5 → click verify-btn labelled 'Analyser cette grille' → single-grid best-hits card renders.",
+    "Frontend: add-grid-btn x2 → row-2 present, remove-grid-0 now exists; verify-btn label becomes 'Comparer les 3 grilles'.",
+    "Frontend: batch-result renders with 3 trophy cards + bar chart + batch-grid-0/1/2 detail cards.",
+    "Frontend: add-grid-btn becomes disabled once 10 grids are present; row-10 (11th) is not created."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iter7.py",
+    "/app/test_reports/pytest/iter7.xml"
+  ],
+  "action_items": [
+    "COSMETIC: Fix Recharts 'width(-1)/height(-1)' warning on the batch comparison ResponsiveContainer by giving the parent an explicit minHeight or a numeric aspect prop."
+  ],
+  "critical_code_review_comments": [
+    "Auto-load in /auth/session correctly wraps _load_official_for_user in try/except so first-login failures don't break authentication — good defensive coding.",
+    "server.py has grown to 1334 lines (was 1248) — routers split still recommended for maintainability.",
+    "verify-batch reuses the same in-memory scan as /grids/verify (loops draws per grid); acceptable at N=1048 × 10 grids but should be flagged if dataset scales to >10k draws."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter7.py",
+    "/app/test_reports/iteration_7.json"
+  ],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "100% (all Verify flows single + multi)"},
+  "test_credentials": "Bearer test_fdj_1784196939161 (1048 real FDJ draws).",
+  "seed_data_creation": "None — reused existing test_fdj_1784196939161 user (1048 draws already loaded).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 7 (multi-grid verify-batch + first-login auto-load) fully passes. If E1 addresses the Recharts width(-1) warning, no retest needed — the chart still renders. Reuse test_iter7.py for regression. Auto-load in /auth/session verified only via static code inspection (OAuth session_id cannot be mocked from testing agent).",
+  "rca_of_the_issue": "N/A — no failures."
+}

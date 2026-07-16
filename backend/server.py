@@ -148,6 +148,14 @@ async def create_session(payload: SessionRequest, response: Response):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
+    # Auto-load the official FDJ dataset on first login (user has no draws yet)
+    existing_draws = await db.draws.count_documents({"user_id": user_id})
+    if existing_draws == 0:
+        try:
+            await _load_official_for_user(user_id)
+        except Exception as e:
+            logger.warning(f"Could not auto-load official dataset for {email}: {e}")
+
     response.set_cookie(
         key="session_token",
         value=session_token,
@@ -234,6 +242,12 @@ async def generate_demo(user: User = Depends(get_current_user)):
 @api_router.post("/draws/load-official")
 async def load_official_dataset(user: User = Depends(get_current_user)):
     """Import the bundled official FDJ dataset (1048 draws Nov 2019 → July 2026)."""
+    result = await _load_official_for_user(user.user_id)
+    return result
+
+
+async def _load_official_for_user(user_id: str) -> dict:
+    """Internal helper: load the bundled official FDJ CSV into a user's draws collection."""
     official_path = ROOT_DIR / "data" / "loto_fdj_official.csv"
     if not official_path.exists():
         raise HTTPException(status_code=500, detail="Dataset officiel introuvable")
@@ -251,7 +265,7 @@ async def load_official_dataset(user: User = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Encodage dataset non reconnu")
 
     # Clear existing draws for the user first
-    await db.draws.delete_many({"user_id": user.user_id})
+    await db.draws.delete_many({"user_id": user_id})
 
     reader = csv.DictReader(io.StringIO(content), delimiter=";")
     docs = []
@@ -266,7 +280,7 @@ async def load_official_dataset(user: User = Depends(get_current_user)):
                 continue
             docs.append({
                 "id": str(uuid.uuid4()),
-                "user_id": user.user_id,
+                "user_id": user_id,
                 "date": date_iso,
                 "numbers": nums,
                 "chance": chance,
@@ -759,6 +773,78 @@ def _grid_payout(main_matches: int, chance_match: bool) -> float:
 class VerifyGridRequest(BaseModel):
     numbers: List[int]
     chance: int
+
+
+class VerifyBatchRequest(BaseModel):
+    grids: List[VerifyGridRequest]
+
+
+@api_router.post("/grids/verify-batch")
+async def verify_batch(payload: VerifyBatchRequest, user: User = Depends(get_current_user)):
+    """Verify multiple grids at once and compare their historical performance."""
+    if not payload.grids:
+        raise HTTPException(status_code=400, detail="Au moins une grille est requise")
+    if len(payload.grids) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 grilles à la fois")
+
+    for i, g in enumerate(payload.grids):
+        if not _valid_draw(g.numbers, g.chance):
+            raise HTTPException(status_code=400, detail=f"Grille #{i+1} invalide")
+
+    draws = await _get_all_draws(user.user_id)
+    total = len(draws)
+    if total == 0:
+        raise HTTPException(status_code=400, detail="Aucun tirage. Chargez le dataset FDJ officiel.")
+
+    results = []
+    for i, g in enumerate(payload.grids):
+        grid_set = set(g.numbers)
+        dist = [0] * 6
+        chance_hits = 0
+        combined_5_chance = 0
+        total_matches = 0  # sum of main matches across all draws
+        rank_counts = {r: 0 for r in ["Rang 1 · Jackpot", "Rang 2", "Rang 3", "Rang 4", "Rang 5",
+                                       "Rang 6", "Rang 7", "Rang 8", "Rang 9 · N° Chance", "Perdu"]}
+        gross_gain = 0.0
+        for d in draws:
+            matches = len(grid_set & set(d["numbers"]))
+            chance_match = d["chance"] == g.chance
+            dist[matches] += 1
+            total_matches += matches
+            if chance_match:
+                chance_hits += 1
+                if matches == 5:
+                    combined_5_chance += 1
+            rank = _payout_rank(matches, chance_match)
+            rank_counts[rank] += 1
+            gross_gain += _grid_payout(matches, chance_match)
+
+        results.append({
+            "index": i,
+            "grid": {"numbers": sorted(g.numbers), "chance": g.chance},
+            "distribution": [{"main_matches": k, "count": dist[k]} for k in range(6)],
+            "chance_hits": chance_hits,
+            "combined_5_and_chance": combined_5_chance,
+            "avg_main_matches": round(total_matches / total, 3) if total else 0,
+            "gross_gain": round(gross_gain, 2),
+            "hit_3plus": dist[3] + dist[4] + dist[5],
+            "hit_2plus": dist[2] + dist[3] + dist[4] + dist[5],
+            "per_rank": [{"rank": r, "count": c} for r, c in rank_counts.items() if c > 0],
+        })
+
+    # Best-in-class rankings
+    best = {
+        "by_avg": max(results, key=lambda x: x["avg_main_matches"])["index"],
+        "by_gain": max(results, key=lambda x: x["gross_gain"])["index"],
+        "by_hits_3plus": max(results, key=lambda x: x["hit_3plus"])["index"],
+    }
+
+    return {
+        "total_draws": total,
+        "grids_count": len(results),
+        "results": results,
+        "best": best,
+    }
 
 
 @api_router.post("/grids/verify")
