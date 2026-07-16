@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 11 — Whitelist disabled (ALLOWED_EMAILS=''). Backend-only smoke test. 12/12 pytest tests pass: unauth returns 401, public /api/ returns 200, and a NEW non-whitelisted user (test.iter11+*@example.com) can access /auth/me, /draws, /grids/verify, /grids/wheel, /stats/frequency. Regression: labouyrie28@gmail.com session still works. Auto-load code path (/auth/session -> _load_official_for_user on new users) confirmed present in server.py.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter11_open_access.py",
+    "/app/test_reports/pytest/iter11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py at ~1523 lines — split recommended (auth/grids/stats/alerts/wheel).",
+    "Resend is still in sandbox mode: /alerts/send will succeed only for labouyrie28@gmail.com. New users who opt-in to alerts will get 500 errors from Resend until sender domain is verified. Consider surfacing a friendly warning in the UI or catching the Resend rejection more gracefully.",
+    "Auto-load in /auth/session triggers a 1048-row CSV insert synchronously on first login — first-login latency may be noticeable (still under a couple of seconds locally, but consider running it in the background)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter11_open_access.py"],
+  "success_rate": {"backend": "100%", "frontend": "not tested (per request)"},
+  "test_credentials": "Ephemeral mongosh-injected sessions. Real user labouyrie28@gmail.com not modified.",
+  "seed_data_creation": "One ephemeral non-whitelisted user (test.iter11+*@example.com) + one ephemeral session for labouyrie28@gmail.com, both cleaned up in fixture teardown. 30 seed draws inserted for the new user (cleaned up).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Whitelist is now OPEN (ALLOWED_EMAILS=''). Anyone with a valid Google session_token can use the app. Reuse /app/backend/tests/test_iter11_open_access.py for regression. Note: Resend email sending is still restricted to labouyrie28@gmail.com by Resend sandbox mode — this is external, not a code bug.",
+  "rca of the issue": "N/A — config change validation. server.py:97-99 gates on `if allowed and ...`; when ALLOWED_EMAILS='' the list is empty and the 403 branch is skipped. Verified end-to-end that a brand-new user reaches all protected endpoints with 200 and identifies as themselves via /auth/me."
+}
