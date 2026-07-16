@@ -142,8 +142,14 @@ const Generator = () => {
           </div>
           <p className="text-xs text-zinc-400 leading-relaxed">
             Ces grilles sont les <strong>5 plus crédibles</strong> parmi 10 candidates générées aléatoirement (pondérées par les fréquences historiques).
-            Critères de crédibilité : somme proche de la moyenne historique (<span className="font-mono-tab text-violet-400">{meta.stats.hist_sum_mean}</span>),
+            Critères : somme proche de la moyenne historique (<span className="font-mono-tab text-violet-400">{meta.stats.hist_sum_mean}</span>),
             parité proche de <span className="font-mono-tab text-violet-400">{meta.stats.hist_even_mean}</span> pairs, répartition sur les 5 décades, pas de série consécutive.
+          </p>
+          <p className="text-[11px] text-zinc-500 leading-relaxed mt-3 pt-3 border-t border-white/5">
+            <strong className="text-amber-400">⚠ À NE PAS confondre :</strong> "Crédibilité 96%" ne veut PAS dire "96% de chance de gagner".
+            Ça veut dire "cette grille <em>ressemble</em> à un tirage FDJ typique". Une grille [1,2,3,4,5] a une crédibilité de 2% (bizarre)
+            mais a EXACTEMENT la même probabilité qu'une grille "96% crédible" — <span className="text-white">1 sur 19 068 840</span> pour le jackpot.
+            C'est purement esthétique / statistique.
           </p>
         </Card>
       )}
