@@ -532,6 +532,7 @@ async def save_grid(payload: SaveGridRequest, user: User = Depends(get_current_u
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.saved_grids.insert_one(doc)
+    doc.pop("_id", None)
     return doc
 
 
