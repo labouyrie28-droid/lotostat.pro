@@ -32,6 +32,16 @@ const Overview = () => {
     finally { setGenerating(false); }
   };
 
+  const loadOfficial = async () => {
+    setGenerating(true);
+    try {
+      const { data } = await api.post("/draws/load-official");
+      toast.success(`${data.inserted} tirages FDJ officiels chargés`);
+      await load();
+    } catch { toast.error("Échec"); }
+    finally { setGenerating(false); }
+  };
+
   const last = draws[0];
 
   return (
@@ -60,15 +70,24 @@ const Overview = () => {
           <p className="text-sm text-zinc-400 mb-6 max-w-md mx-auto">
             Générez 3 années de données de démonstration ou importez un fichier CSV pour commencer l'analyse.
           </p>
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <Button
+              data-testid="load-official-btn"
+              disabled={generating}
+              onClick={loadOfficial}
+              className="rounded-full bg-emerald-400 hover:bg-emerald-300 text-black font-semibold"
+            >
+              {generating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Charger le dataset FDJ officiel (1048 tirages)
+            </Button>
             <Button
               data-testid="generate-demo-btn"
               disabled={generating}
               onClick={generateDemo}
-              className="rounded-full bg-amber-400 hover:bg-amber-300 text-black font-semibold"
+              variant="outline"
+              className="rounded-full border-white/10 bg-transparent hover:bg-white/5"
             >
-              {generating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Générer 3 ans de démo
+              Générer démo
             </Button>
             <Button
               data-testid="goto-import-btn"
@@ -76,7 +95,7 @@ const Overview = () => {
               onClick={() => navigate("/dashboard/import")}
               className="rounded-full border-white/10 bg-transparent hover:bg-white/5"
             >
-              Importer un CSV
+              Importer CSV
             </Button>
           </div>
         </Card>

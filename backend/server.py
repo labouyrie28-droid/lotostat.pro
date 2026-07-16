@@ -231,6 +231,58 @@ async def generate_demo(user: User = Depends(get_current_user)):
     return {"inserted": len(draws)}
 
 
+@api_router.post("/draws/load-official")
+async def load_official_dataset(user: User = Depends(get_current_user)):
+    """Import the bundled official FDJ dataset (1048 draws Nov 2019 → July 2026)."""
+    official_path = ROOT_DIR / "data" / "loto_fdj_official.csv"
+    if not official_path.exists():
+        raise HTTPException(status_code=500, detail="Dataset officiel introuvable")
+
+    with open(official_path, "rb") as f:
+        raw = f.read()
+    content = None
+    for enc in ("utf-8", "latin-1", "cp1252"):
+        try:
+            content = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    if content is None:
+        raise HTTPException(status_code=500, detail="Encodage dataset non reconnu")
+
+    # Clear existing draws for the user first
+    await db.draws.delete_many({"user_id": user.user_id})
+
+    reader = csv.DictReader(io.StringIO(content), delimiter=";")
+    docs = []
+    errors = 0
+    for row in reader:
+        try:
+            date_iso = datetime.strptime(row["date_de_tirage"].strip(), "%d/%m/%Y").strftime("%Y-%m-%d")
+            nums = sorted([int(row[f"boule_{i}"]) for i in range(1, 6)])
+            chance = int(row["numero_chance"])
+            if not _valid_draw(nums, chance):
+                errors += 1
+                continue
+            docs.append({
+                "id": str(uuid.uuid4()),
+                "user_id": user.user_id,
+                "date": date_iso,
+                "numbers": nums,
+                "chance": chance,
+            })
+        except Exception:
+            errors += 1
+    if docs:
+        await db.draws.insert_many(docs)
+    return {
+        "inserted": len(docs),
+        "errors": errors,
+        "period": {"from": min(d["date"] for d in docs) if docs else None,
+                   "to": max(d["date"] for d in docs) if docs else None},
+    }
+
+
 @api_router.post("/draws/import-csv")
 async def import_csv(file: UploadFile = File(...), user: User = Depends(get_current_user)):
     raw = await file.read()
@@ -339,17 +391,44 @@ async def _get_all_draws(user_id: str) -> List[dict]:
 
 @api_router.get("/stats/frequency")
 async def stats_frequency(user: User = Depends(get_current_user)):
+    import math
     draws = await _get_all_draws(user.user_id)
+    total = len(draws)
     main = Counter()
     chance = Counter()
     for d in draws:
         for n in d["numbers"]:
             main[n] += 1
         chance[d["chance"]] += 1
+
+    # Rigueur : chi² sur les 49 numéros (48 degrés de liberté)
+    expected_main = 5 * total / 49 if total else 0
+    sigma_main = math.sqrt(total * (5/49) * (44/49)) if total else 0
+    chi2_main = sum((main.get(n, 0) - expected_main) ** 2 / expected_main for n in range(1, 50)) if expected_main > 0 else 0
+
+    # Idem pour la chance (10 numéros, 9 dof)
+    expected_chance = total / 10 if total else 0
+    sigma_chance = math.sqrt(total * (1/10) * (9/10)) if total else 0
+    chi2_chance = sum((chance.get(n, 0) - expected_chance) ** 2 / expected_chance for n in range(1, 11)) if expected_chance > 0 else 0
+
     return {
-        "total_draws": len(draws),
+        "total_draws": total,
         "main": [{"number": n, "count": main.get(n, 0)} for n in range(1, 50)],
         "chance": [{"number": n, "count": chance.get(n, 0)} for n in range(1, 11)],
+        "main_stats": {
+            "expected": round(expected_main, 1),
+            "sigma": round(sigma_main, 1),
+            "chi2": round(chi2_main, 2),
+            "chi2_threshold_5pct": 65.17,  # dof=48, alpha=0.05
+            "biased": chi2_main > 65.17,
+        },
+        "chance_stats": {
+            "expected": round(expected_chance, 1),
+            "sigma": round(sigma_chance, 1),
+            "chi2": round(chi2_chance, 2),
+            "chi2_threshold_5pct": 16.92,  # dof=9, alpha=0.05
+            "biased": chi2_chance > 16.92,
+        },
     }
 
 
@@ -412,12 +491,18 @@ async def stats_pairs(user: User = Depends(get_current_user)):
 
 
 @api_router.get("/stats/trend")
-async def stats_trend(window: int = 20, user: User = Depends(get_current_user)):
-    """Compare taux récent vs global. Inspired by LotoAI-Pro v0.7 TrendIndicator."""
+async def stats_trend(window: int = 100, user: User = Depends(get_current_user)):
+    """
+    Récent vs global. Rigueur statistique renforcée :
+    - Seuil de fiabilité minimum : 200 tirages (1 an environ) au lieu de 15
+    - Correction de Bonferroni sur 49 tests simultanés
+    - Retourne seuil_bruit_pct = ± seuil sous lequel l'écart est considéré comme bruit
+    """
+    import math
     draws = await _get_all_draws(user.user_id)
     total = len(draws)
     window = max(5, min(window, total)) if total else 0
-    SEUIL_FIABILITE = 15
+    SEUIL_FIABILITE = 200
     fiable = window >= SEUIL_FIABILITE
 
     global_freq = Counter()
@@ -429,21 +514,33 @@ async def stats_trend(window: int = 20, user: User = Depends(get_current_user)):
         for n in d["numbers"]:
             recent_freq[n] += 1
 
+    # Écart-type sous hypothèse d'indépendance : sqrt(p*(1-p)/N) * 100 en points de %
+    # avec p = 5/49 = 0.102
+    p = 5 / 49
+    sigma_pct = (math.sqrt(p * (1 - p) / window) * 100) if window else 0
+    # Correction Bonferroni : 49 tests simultanés à 5% -> chaque test à 0.1% -> z ~ 3.29
+    seuil_bruit = 3.29 * sigma_pct
+
     tendances = []
     for n in range(1, 50):
         tg = (global_freq.get(n, 0) / total * 100) if total else 0.0
         tr = (recent_freq.get(n, 0) / window * 100) if window else 0.0
+        ecart = tr - tg
+        significatif = abs(ecart) > seuil_bruit
         tendances.append({
             "number": n,
             "taux_global": round(tg, 2),
             "taux_recent": round(tr, 2),
-            "ecart": round(tr - tg, 2),
+            "ecart": round(ecart, 2),
+            "significatif": significatif,
         })
     tendances.sort(key=lambda x: x["ecart"], reverse=True)
     return {
         "fenetre_recente": window,
         "seuil_fiabilite": SEUIL_FIABILITE,
         "fiable": fiable,
+        "seuil_bruit_pct": round(seuil_bruit, 2),
+        "sigma_pct": round(sigma_pct, 2),
         "hausse": tendances[:10],
         "baisse": list(reversed(tendances[-10:])),
         "all": tendances,
@@ -854,8 +951,9 @@ async def backtest(payload: BacktestRequest, user: User = Depends(get_current_us
     results = {s: {
         "grids_tested": 0,
         "sum_main_matches": 0,
+        "sum_main_matches_sq": 0,  # for std dev
         "chance_matches": 0,
-        "rank_hist": [0] * 6,   # index = main matches (0..5)
+        "rank_hist": [0] * 6,
         "hits_3plus": 0,
         "hits_5plus_chance": 0,
         "gross_gains": 0.0,
@@ -873,6 +971,7 @@ async def backtest(payload: BacktestRequest, user: User = Depends(get_current_us
                 r = results[s]
                 r["grids_tested"] += 1
                 r["sum_main_matches"] += matches
+                r["sum_main_matches_sq"] += matches * matches
                 r["rank_hist"][matches] += 1
                 if chance == actual_chance:
                     r["chance_matches"] += 1
@@ -882,17 +981,28 @@ async def backtest(payload: BacktestRequest, user: User = Depends(get_current_us
                     r["hits_3plus"] += 1
                 r["gross_gains"] += _grid_payout(matches, chance == actual_chance)
 
+    import math
+    # Espérance théorique du hasard pur : 5 * 5/49
+    theoretical_avg = 5 * 5 / 49
     summary = []
     for s in strategies:
         r = results[s]
         gt = r["grids_tested"] or 1
+        avg = r["sum_main_matches"] / gt
+        var = (r["sum_main_matches_sq"] / gt) - (avg ** 2)
+        std_err = math.sqrt(max(var, 0) / gt)  # standard error of the mean
+        ci95 = 1.96 * std_err
+        # Est-ce que la stratégie bat le hasard pur ?
+        beats_random = (avg - ci95) > theoretical_avg
         cost = r["grids_tested"] * FDJ_GRID_COST
         net = r["gross_gains"] - cost
         roi = (net / cost * 100) if cost else 0.0
         summary.append({
             "strategy": s,
             "grids_tested": r["grids_tested"],
-            "avg_main_matches": round(r["sum_main_matches"] / gt, 3),
+            "avg_main_matches": round(avg, 3),
+            "ci95": round(ci95, 3),
+            "beats_random": beats_random,
             "chance_hit_rate": round(r["chance_matches"] / gt * 100, 2),
             "hit_3plus_rate": round(r["hits_3plus"] / gt * 100, 2),
             "rank_distribution": r["rank_hist"],
@@ -910,6 +1020,8 @@ async def backtest(payload: BacktestRequest, user: User = Depends(get_current_us
         "grids_per_strategy": n_grids,
         "grid_cost": FDJ_GRID_COST,
         "payout_table": FDJ_PAYOUTS,
+        "theoretical_avg": round(theoretical_avg, 3),
+        "any_beats_random": any(s["beats_random"] for s in summary),
         "strategies": summary,
     }
 

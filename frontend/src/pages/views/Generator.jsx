@@ -58,6 +58,16 @@ const Generator = () => {
         <p className="text-sm text-zinc-500 max-w-2xl">Choisissez une stratégie basée sur l'analyse des tirages passés. Rappel : les tirages sont indépendants — aucune méthode ne garantit un gain.</p>
       </header>
 
+      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.03] p-4 flex items-start gap-3">
+        <svg className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p className="text-xs text-zinc-300 leading-relaxed">
+          <strong className="text-amber-400">Verdict scientifique honnête :</strong> les tests statistiques sur 1048 tirages
+          FDJ confirment que les 5 stratégies produisent en moyenne <span className="font-mono-tab">0.51 numéros trouvés/grille</span>
+          — soit exactement la même performance qu'une grille aléatoire. Ces "stratégies" sont un outil de
+          <em> visualisation</em>, pas un système gagnant.
+        </p>
+      </div>
+
       <Card className="p-6 border-white/5 bg-[#0d0d10]">
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4">Stratégie</div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

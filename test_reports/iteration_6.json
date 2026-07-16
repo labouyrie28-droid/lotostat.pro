@@ -1,0 +1,61 @@
+{
+  "summary": "Iteration 6 methodology + UI enrichment: ALL new backend endpoints/fields verified. POST /draws/load-official inserts exactly 1048 rows with period 2019-11-06 → 2026-07-15, errors=0. GET /stats/frequency returns main_stats (chi2=34.81, threshold=65.17, biased=false) + chance_stats (chi2=3.16, threshold=16.92, biased=false) — matches expected values exactly. GET /stats/trend?window=100 default returns seuil_fiabilite=200, seuil_bruit_pct (Bonferroni-corrected), sigma_pct, and each item has 'significatif' bool. POST /backtest returns per-strategy ci95+beats_random and top-level theoretical_avg=0.510+any_beats_random. Frontend: Chi² verdict card, verdict banner in Backtest, honest banner in Generator, 3-card DataImport page all render correctly and match methodology. Regression: 0 page errors on rapid navigation.",
+  "tested_scope": ["backend", "frontend", "regression"],
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/backtest",
+        "issue": "any_beats_random can return TRUE contradicting the stated methodological claim. With grids_per_strategy=20 sample_size=500, the 'hot' strategy achieved avg=0.526 with ci95=0.013 → (0.526-0.013)=0.513 > theoretical 0.510 → beats_random=True. This is not a code bug but a methodology inconsistency: the 'hot' strategy has DATA-SNOOPING BIAS (it derives hot numbers from the full history then tests on the same history). To honestly claim 'no strategy beats random on real FDJ data', the backtest must use walk-forward (compute hot numbers only from tirages BEFORE the tested draw). UI text and review request assumption assume this is already the case."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Overview draws count",
+        "issue": "Overview page shows '500 tirages analysés' after loading 1048 official draws because GET /api/draws is capped at 500 rows and the counter is derived from response length instead of a dedicated /count endpoint. Stats page correctly shows 'Sur 1048 tirages' via /api/stats/frequency total_draws field. Suggest fetching total via a lightweight count endpoint or reading total_draws from stats.",
+        "affected_selectors": ["[data-testid=\"stat-total-draws\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "passed": [
+    "POST /api/draws/load-official → inserted=1048, errors=0, period.from=2019-11-06, period.to=2026-07-15.",
+    "GET /api/stats/frequency main_stats.chi2=34.81 (threshold 65.17, biased=false), chance_stats.chi2=3.16 (threshold 16.92, biased=false).",
+    "GET /api/stats/trend default window=100 (fenetre_recente=100), seuil_fiabilite=200, seuil_bruit_pct returned, sigma_pct returned, hausse/baisse/all items each expose 'significatif' bool.",
+    "POST /api/backtest returns theoretical_avg≈0.510, per-strategy ci95 float, beats_random bool, top-level any_beats_random.",
+    "Frontend Stats: 'Test du Chi²' verdict card renders with 34.81 / seuil 5%=65.17 and 3.16 / seuil 5%=16.92 plus green '✓ Tirages parfaitement aléatoires' badges.",
+    "Frontend Stats trend section: 'Seuil de bruit statistique (Bonferroni, 49 tests): ±22.27 pts %, σ=6.77 pts %' info bar rendered.",
+    "Frontend Backtest: 'Verdict scientifique' amber banner rendered, 'Espérance théorique du hasard pur : 0.51 matches/grille' shown, per-strategy header shows 'X.XXX ± Y.YYY NUM/GRILLE (IC 95%)' and '= hasard pur' label under aléatoire pur / '= hasard pur' or 'bat le hasard' per strategy.",
+    "Frontend Generator: 'Verdict scientifique honnête' banner rendered mentioning '1048 tirages FDJ', '0.51 numéros trouvés/grille', 'même performance qu'une grille aléatoire'.",
+    "Frontend DataImport: 3 cards rendered — 'Dataset FDJ officiel' (emerald ShieldCheck + load-official-btn + '1048 tirages' text), 'Données de démo' (amber + generate-demo-data-btn), 'Import CSV personnalisé' (csv-file-input).",
+    "Frontend Overview empty state CTAs (load-official-btn / generate-demo-btn / goto-import-btn) present in JSX (visible only when draws.length===0; hidden with existing 500+ draws — intended).",
+    "Regression: 5-route SPA navigation cycle produced 0 pageerrors / 0 insertBefore / 0 NotFoundError."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iter6.py",
+    "/app/test_reports/pytest/iter6.xml"
+  ],
+  "action_items": [
+    "METHODOLOGY: Refactor backtest 'hot'/'cold'/'balanced'/'weighted' strategies to walk-forward — compute frequency from draws[:i] only, not the full history — otherwise 'hot' can spuriously beat random due to in-sample bias, contradicting the app's own 'Verdict scientifique' banner.",
+    "MINOR: Overview stat-total-draws counter reads len(draws) capped at 500 → replace with stats.total_draws (from /api/stats/frequency) or add /api/draws/count."
+  ],
+  "critical_code_review_comments": [
+    "server.py still 1248 lines — split into routers modules (frequency/backtest/draws/alerts) recommended.",
+    "GET /api/draws still returns a list capped at 500; frontend Overview relies on len(response) for total count, causing incorrect '500 tirages' display when actual DB has 1048.",
+    "Backtest walk-forward guarantee absent: hot/cold/balanced strategies appear to use aggregate frequencies over the entire dataset (which INCLUDES the tested draws), producing in-sample overfitting. This is why any_beats_random=True was observed at N=9980 samples. Either (a) implement true walk-forward, or (b) tone down the 'aucune stratégie ne bat le hasard' claim if strategies do have in-sample bias by design."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter6.py",
+    "/app/test_reports/iteration_6.json"
+  ],
+  "success_rate": {"backend": "100% (7/7 pytest)", "frontend": "100% new UI elements rendered, 0 nav errors"},
+  "test_credentials": "Bearer test_fdj_1784196939161 (FDJ test user with 1048 draws reloaded via /draws/load-official).",
+  "seed_data_creation": "Reloaded 1048 official FDJ draws via POST /api/draws/load-official.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 6 fully validated the methodology-visibility upgrades. The single non-cosmetic finding is that 'any_beats_random' can legitimately return True due to in-sample bias in hot/cold strategies. If E1 fixes backtest to true walk-forward, retest with grids_per_strategy=20 sample_size=500 and verify any_beats_random becomes False. Existing FDJ Bearer token 'test_fdj_1784196939161' remains valid.",
+  "rca_of_the_issue": "any_beats_random=True with 'hot' strategy: hot numbers computed from full frequency counter (all 1048 draws INCLUDING the tested tirages), so when scored against those same draws, the strategy exhibits look-ahead bias. Fix: in backtest loop, for each test draw i, compute hot/cold/balanced from draws[0..i-1] only (walk-forward). Currently hot ci95 lower bound (0.526-0.013=0.513) crosses theoretical 0.510 → algorithm reports beats_random=True."
+}

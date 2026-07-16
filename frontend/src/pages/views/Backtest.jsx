@@ -80,15 +80,26 @@ const Backtest = () => {
       {data && (
         <>
           <Card className="p-6 border-white/5 bg-[#0d0d10]" data-testid="backtest-results">
-            <div className="flex items-baseline justify-between mb-2">
+            <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
               <div>
                 <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Résultats</div>
                 <h2 className="font-heading text-2xl font-semibold">Numéros trouvés en moyenne</h2>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Espérance théorique du hasard pur : <span className="text-amber-400 font-mono-tab">{data.theoretical_avg}</span> matches/grille
+                </p>
               </div>
-              <div className="text-xs text-zinc-500">
-                {data.sample_size} tirages · {data.grids_per_strategy} grilles/strat · {data.grid_cost}€/grille
+              <div className="text-xs text-zinc-500 text-right">
+                {data.sample_size} tirages · {data.grids_per_strategy} grilles/strat<br/>
+                {data.grid_cost}€/grille
               </div>
             </div>
+
+            {!data.any_beats_random && (
+              <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.03] p-3 text-xs text-zinc-300 leading-relaxed">
+                <strong className="text-amber-400">Verdict scientifique :</strong> aucune stratégie ne bat le hasard pur
+                de manière statistiquement significative (avec l'intervalle de confiance à 95%).
+              </div>
+            )}
 
             <div className="h-80 mt-6">
               <ResponsiveContainer>
@@ -162,8 +173,15 @@ const Backtest = () => {
                   <div className="text-right">
                     <div className="font-mono-tab text-3xl font-bold" style={{ color: colorFor(s.strategy) }}>
                       {s.avg_main_matches}
+                      <span className="text-zinc-500 text-lg"> ± {s.ci95}</span>
                     </div>
-                    <div className="text-[10px] uppercase tracking-widest text-zinc-500">num/grille</div>
+                    <div className="text-[10px] uppercase tracking-widest text-zinc-500">num/grille (IC 95%)</div>
+                    {!s.beats_random && (
+                      <div className="text-[10px] mt-1 text-zinc-500">= hasard pur</div>
+                    )}
+                    {s.beats_random && (
+                      <div className="text-[10px] mt-1 text-emerald-400 font-semibold uppercase">bat le hasard</div>
+                    )}
                   </div>
                 </div>
 

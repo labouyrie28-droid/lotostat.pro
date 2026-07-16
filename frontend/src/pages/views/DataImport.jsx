@@ -3,11 +3,20 @@ import { api, API } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Upload, Loader2, Sparkles, Trash2, FileDown } from "lucide-react";
+import { Upload, Loader2, Sparkles, Trash2, FileDown, ShieldCheck } from "lucide-react";
 
 const DataImport = () => {
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
+
+  const loadOfficial = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post("/draws/load-official");
+      toast.success(`${data.inserted} tirages FDJ officiels chargés (${data.period.from} → ${data.period.to})`);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Échec"); }
+    finally { setBusy(false); }
+  };
 
   const generateDemo = async () => {
     setBusy(true);
@@ -56,13 +65,30 @@ const DataImport = () => {
 
       <div className="grid md:grid-cols-2 gap-6">
         <Card className="p-8 border-white/5 bg-[#0d0d10]">
-          <Sparkles className="w-6 h-6 text-amber-400 mb-4" />
-          <h2 className="font-heading text-xl font-semibold mb-2">Données de démonstration</h2>
+          <ShieldCheck className="w-6 h-6 text-emerald-400 mb-4" />
+          <h2 className="font-heading text-xl font-semibold mb-2">Dataset FDJ officiel</h2>
           <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
-            Génère 3 années de tirages simulés (lundi, mercredi, samedi) avec une distribution
-            réaliste pour tester toutes les analyses.
+            Historique officiel de la FDJ : <strong className="text-white">1048 tirages</strong> réels
+            de novembre 2019 à juillet 2026 (Lundi, Mercredi, Samedi). Recommandé pour toutes les analyses.
           </p>
-          <div className="flex gap-3">
+          <Button
+            data-testid="load-official-btn"
+            onClick={loadOfficial}
+            disabled={busy}
+            className="rounded-full bg-emerald-400 hover:bg-emerald-300 text-black font-semibold"
+          >
+            {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
+            Charger le dataset officiel
+          </Button>
+        </Card>
+
+        <Card className="p-8 border-white/5 bg-[#0d0d10]">
+          <Sparkles className="w-6 h-6 text-amber-400 mb-4" />
+          <h2 className="font-heading text-xl font-semibold mb-2">Données de démo</h2>
+          <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+            Génère 3 années de tirages simulés (moins fidèle mais utile pour tester rapidement).
+          </p>
+          <div className="flex gap-3 flex-wrap">
             <Button
               data-testid="generate-demo-data-btn"
               onClick={generateDemo}
@@ -70,7 +96,7 @@ const DataImport = () => {
               className="rounded-full bg-amber-400 hover:bg-amber-300 text-black font-semibold"
             >
               {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
-              Générer 3 ans
+              Générer démo
             </Button>
             <Button
               data-testid="clear-draws-btn"
@@ -83,10 +109,11 @@ const DataImport = () => {
             </Button>
           </div>
         </Card>
+      </div>
 
-        <Card className="p-8 border-white/5 bg-[#0d0d10]">
-          <Upload className="w-6 h-6 text-sky-400 mb-4" />
-          <h2 className="font-heading text-xl font-semibold mb-2">Import CSV</h2>
+      <Card className="p-8 border-white/5 bg-[#0d0d10]">
+        <Upload className="w-6 h-6 text-sky-400 mb-4" />
+        <h2 className="font-heading text-xl font-semibold mb-2">Import CSV personnalisé</h2>
           <p className="text-sm text-zinc-400 mb-3 leading-relaxed">
             Format compatible LotoAI Pro v0.7 : <code className="text-amber-400">date,n1,n2,n3,n4,n5,chance</code>.
             Dates au format <code>YYYY-MM-DD</code> ou <code>DD/MM/YYYY</code>.
@@ -110,7 +137,6 @@ const DataImport = () => {
             />
           </div>
         </Card>
-      </div>
 
       <Card className="p-5 border-amber-500/20 bg-amber-500/[0.03]">
         <p className="text-xs text-zinc-400 leading-relaxed">

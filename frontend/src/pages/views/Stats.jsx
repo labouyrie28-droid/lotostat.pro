@@ -64,6 +64,38 @@ const Stats = () => {
         <div className="text-xs text-zinc-500">Sur {freq.total_draws} tirages</div>
       </header>
 
+      {/* Chi² verdict */}
+      <Card className="p-6 border-white/5 bg-[#0d0d10]" data-testid="chi2-verdict">
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-2">Test du Chi² — Numéros principaux (dof=48)</div>
+            <div className="flex items-baseline gap-3">
+              <div className="font-mono-tab font-bold text-3xl">{freq.main_stats.chi2}</div>
+              <div className="text-zinc-500 text-sm">/ seuil 5% = {freq.main_stats.chi2_threshold_5pct}</div>
+            </div>
+            <div className={`text-xs mt-2 font-semibold ${freq.main_stats.biased ? "text-red-400" : "text-emerald-400"}`}>
+              {freq.main_stats.biased ? "⚠ Biais détecté" : "✓ Tirages parfaitement aléatoires"}
+            </div>
+            <div className="text-[10px] text-zinc-500 mt-1">
+              Espérance {freq.main_stats.expected} ± σ={freq.main_stats.sigma} par numéro
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-2">Test du Chi² — N° Chance (dof=9)</div>
+            <div className="flex items-baseline gap-3">
+              <div className="font-mono-tab font-bold text-3xl">{freq.chance_stats.chi2}</div>
+              <div className="text-zinc-500 text-sm">/ seuil 5% = {freq.chance_stats.chi2_threshold_5pct}</div>
+            </div>
+            <div className={`text-xs mt-2 font-semibold ${freq.chance_stats.biased ? "text-red-400" : "text-emerald-400"}`}>
+              {freq.chance_stats.biased ? "⚠ Biais détecté" : "✓ Tirages parfaitement aléatoires"}
+            </div>
+            <div className="text-[10px] text-zinc-500 mt-1">
+              Espérance {freq.chance_stats.expected} ± σ={freq.chance_stats.sigma}
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* Fréquences numéros principaux */}
       <Card className="p-6 border-white/5 bg-[#0d0d10]">
         <div className="flex items-baseline justify-between mb-6">
@@ -179,6 +211,15 @@ const Stats = () => {
           </div>
         )}
 
+        {trend && (
+          <div className="rounded-lg border border-white/5 bg-black/30 p-3 text-[11px] text-zinc-400 leading-relaxed mb-4">
+            <span className="text-zinc-500">Seuil de bruit statistique (Bonferroni, 49 tests) :</span>
+            <span className="text-amber-400 font-mono-tab font-semibold ml-1">± {trend.seuil_bruit_pct} pts %</span>
+            <span className="text-zinc-500 ml-2">· σ = {trend.sigma_pct} pts %</span>
+            <span className="text-zinc-600 ml-3">Un écart supérieur en valeur absolue est probablement significatif.</span>
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 gap-6">
           <TrendList title="En hausse" items={trend?.hausse || []} accent="text-emerald-400" />
           <TrendList title="En baisse" items={trend?.baisse || []} accent="text-red-400" />
@@ -241,10 +282,11 @@ const TrendList = ({ title, items, accent }) => (
     <div className={`text-xs uppercase tracking-[0.2em] mb-3 ${accent}`}>{title}</div>
     <div className="space-y-1.5">
       {items.map((t) => (
-        <div key={t.number} className="flex items-center justify-between px-3 py-2 rounded-md border border-white/5">
+        <div key={t.number} className={`flex items-center justify-between px-3 py-2 rounded-md border ${t.significatif ? "border-amber-500/30 bg-amber-500/[0.03]" : "border-white/5"}`}>
           <div className="flex items-center gap-3">
             <span className="font-mono-tab font-semibold">{t.number}</span>
             <span className="text-[10px] text-zinc-500">R: {t.taux_recent}% · G: {t.taux_global}%</span>
+            {t.significatif && <span className="text-[9px] uppercase text-amber-400">signif.</span>}
           </div>
           <span className={`font-mono-tab text-sm font-semibold ${t.ecart > 0 ? "text-emerald-400" : "text-red-400"}`}>
             {t.ecart > 0 ? "+" : ""}{t.ecart} pt
