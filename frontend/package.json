@@ -94,7 +94,7 @@
     "postcss": "8.5.10",
     "tailwindcss": "3.4.17"
   },
-  "resolutions": {
+  "resolutions": {"ajv": "^8.17.1",
     "react-router": "7.15.0",
     "node-forge": "1.4.0",
     "fast-uri": "3.1.2",
