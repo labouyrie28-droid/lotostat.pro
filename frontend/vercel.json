@@ -1,1 +1,1 @@
-{ "installCommand": "npm install --legacy-peer-deps" }
+ { "installCommand": "yarn install" }
