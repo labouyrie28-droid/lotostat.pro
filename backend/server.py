@@ -1982,6 +1982,7 @@ async def _start_scheduler():
     scheduler.add_job(_run_daily_alerts, "cron", hour=12, minute=0, id="daily_loto_alert", replace_existing=True)
     # Results alert: every day at 09:00 Paris (sends only on Tue/Thu/Sun, day after a draw)
     scheduler.add_job(_run_results_alerts, "cron", hour=9, minute=0, id="results_loto_alert", replace_existing=True)
+    scheduler.add_job(_run_draw_sync, "cron", hour=21, minute=30, id="draw_sync", replace_existing=True)
     scheduler.start()
     logger.info("Scheduler started (grids @12:00 · results @09:00 Paris)")
 
