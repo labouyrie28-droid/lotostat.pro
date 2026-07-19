@@ -304,6 +304,74 @@ async def _load_official_for_user(user_id: str) -> dict:
                    "to": max(d["date"] for d in docs) if docs else None},
     }
 
+async def _fetch_latest_official_rows() -> List[dict]:
+    """Télécharge l'historique officiel FDJ (mis à jour après chaque tirage)
+    et retourne les tirages sous forme de liste triée par date croissante."""
+    async with httpx.AsyncClient(timeout=30) as http:
+        r = await http.get("https://media.fdj.fr/generated/game/loto/nouveau_loto.zip")
+        r.raise_for_status()
+        content_bytes = r.content
+
+    with zipfile.ZipFile(io.BytesIO(content_bytes)) as zf:
+        csv_name = next(n for n in zf.namelist() if n.lower().endswith(".csv"))
+        raw = zf.read(csv_name)
+
+    content = None
+    for enc in ("utf-8", "latin-1", "cp1252"):
+        try:
+            content = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    if content is None:
+        return []
+
+    reader = csv.DictReader(io.StringIO(content), delimiter=";")
+    rows = []
+    for row in reader:
+        try:
+            date_iso = datetime.strptime(row["date_de_tirage"].strip(), "%d/%m/%Y").strftime("%Y-%m-%d")
+            nums = sorted([int(row[f"boule_{i}"]) for i in range(1, 6)])
+            chance = int(row["numero_chance"])
+            if not _valid_draw(nums, chance):
+                continue
+            rows.append({"date": date_iso, "numbers": nums, "chance": chance})
+        except Exception:
+            continue
+    rows.sort(key=lambda d: d["date"])
+    return rows
+
+
+async def _run_draw_sync():
+    """S'exécute chaque soir. Les soirs de tirage (lun/mer/sam), télécharge
+    les résultats officiels FDJ et ajoute le nouveau tirage à l'historique
+    de chaque utilisateur qui a déjà des tirages enregistrés."""
+    today = datetime.now(timezone.utc).date()
+    if today.weekday() not in (0, 2, 5):
+        return
+    try:
+        official_rows = await _fetch_latest_official_rows()
+    except Exception as e:
+        logger.error(f"Draw sync: failed to fetch FDJ data: {e}")
+        return
+    if not official_rows:
+        return
+    latest_rows = official_rows[-5:]
+
+    user_ids = await db.draws.distinct("user_id")
+    for uid in user_ids:
+        try:
+            existing_dates = set(await db.draws.distinct("date", {"user_id": uid}))
+            to_insert = [
+                {"id": str(uuid.uuid4()), "user_id": uid, **row}
+                for row in latest_rows if row["date"] not in existing_dates
+            ]
+            if to_insert:
+                await db.draws.insert_many(to_insert)
+                logger.info(f"Draw sync: added {len(to_insert)} new draw(s) for user {uid}")
+        except Exception as e:
+            logger.error(f"Draw sync error for user {uid}: {e}")
+
 
 @api_router.post("/draws/import-csv")
 async def import_csv(file: UploadFile = File(...), user: User = Depends(get_current_user)):
