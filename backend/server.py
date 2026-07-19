@@ -715,6 +715,34 @@ async def sync_latest_official(user: User = Depends(get_current_user)):
         await db.draws.insert_many(to_insert)
     return {"inserted": len(to_insert), "latest_official_date": official_rows[-1]["date"]}
     
+@api_router.post("/draws/sync-latest-cron")
+async def sync_latest_cron(request: Request):
+    """Route de synchronisation automatique (appelée par un service externe),
+    protégée par une clé secrète — pas besoin d'être connecté."""
+    secret_recu = request.headers.get("X-Cron-Secret", "")
+    secret_attendu = os.environ.get("CRON_SECRET", "")
+    if not secret_attendu or secret_recu != secret_attendu:
+        raise HTTPException(status_code=401, detail="Clé secrète invalide")
+
+    official_rows = await _fetch_latest_official_rows()
+    if not official_rows:
+        raise HTTPException(status_code=502, detail="Impossible de récupérer les données FDJ")
+
+    latest_rows = official_rows[-5:]
+    user_ids = await db.draws.distinct("user_id")
+    total_inserted = 0
+    for uid in user_ids:
+        existing_dates = set(await db.draws.distinct("date", {"user_id": uid}))
+        to_insert = [
+            {"id": str(uuid.uuid4()), "user_id": uid, **row}
+            for row in latest_rows if row["date"] not in existing_dates
+        ]
+        if to_insert:
+            await db.draws.insert_many(to_insert)
+            total_inserted += len(to_insert)
+
+    return {"inserted": total_inserted, "latest_official_date": official_rows[-1]["date"]}
+
 @api_router.get("/draws/csv-template")
 async def csv_template():
     """Template CSV compatible avec le format LotoAI Pro v0.7."""
