@@ -700,6 +700,21 @@ async def stats_trend(window: int = 100, user: User = Depends(get_current_user))
     }
 
 
+@api_router.post("/draws/sync-latest")
+async def sync_latest_official(user: User = Depends(get_current_user)):
+    """Déclenche manuellement une synchronisation avec les résultats officiels FDJ."""
+    official_rows = await _fetch_latest_official_rows()
+    if not official_rows:
+        raise HTTPException(status_code=502, detail="Impossible de récupérer les données FDJ")
+    existing_dates = set(await db.draws.distinct("date", {"user_id": user.user_id}))
+    to_insert = [
+        {"id": str(uuid.uuid4()), "user_id": user.user_id, **row}
+        for row in official_rows[-10:] if row["date"] not in existing_dates
+    ]
+    if to_insert:
+        await db.draws.insert_many(to_insert)
+    return {"inserted": len(to_insert), "latest_official_date": official_rows[-1]["date"]}
+    
 @api_router.get("/draws/csv-template")
 async def csv_template():
     """Template CSV compatible avec le format LotoAI Pro v0.7."""
