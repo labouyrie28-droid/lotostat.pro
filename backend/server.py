@@ -308,7 +308,7 @@ async def _fetch_latest_official_rows() -> List[dict]:
     """Télécharge l'historique officiel FDJ (mis à jour après chaque tirage)
     et retourne les tirages sous forme de liste triée par date croissante."""
     async with httpx.AsyncClient(timeout=30) as http:
-        r = await http.get("https://media.fdj.fr/generated/game/loto/nouveau_loto.zip")
+        r = await http.get("https://media.fdj.fr/static-draws/csv/loto/loto_201911.zip")
         r.raise_for_status()
         content_bytes = r.content
 
