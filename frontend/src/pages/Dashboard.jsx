@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import {
-  LayoutDashboard, History, BarChart3, Flame, Grid3X3, Sparkles, TrendingUp, Search, Zap, GitCompareArrows, Bookmark, Bell, Upload, LogOut, Sparkle,
+  LayoutDashboard, History, BarChart3, Flame, Grid3X3, Sparkles, TrendingUp, Search, Zap, GitCompareArrows, Bookmark, Bell, Upload, LogOut, Sparkle, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
