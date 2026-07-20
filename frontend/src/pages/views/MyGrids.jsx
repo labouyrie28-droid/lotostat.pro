@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { LotteryBall } from "@/components/LotteryBall";
 import { toast } from "sonner";
-import { Loader2, Trash2, Bookmark, Trophy, Target, Clock, Share2, Link as LinkIcon, Mail, Copy, Check } from "lucide-react";
+import { Loader2, Trash2, Bookmark, Trophy, Target, Clock, Share2, Link as LinkIcon, Mail, Copy, Check, Wallet, Euro } from "lucide-react";
 
 const strategyLabels = {
   hot: "Chauds", cold: "Froids", balanced: "Équilibrée", weighted_random: "Aléatoire pondérée",
@@ -34,7 +34,11 @@ const MyGrids = () => {
   const [shareMessage, setShareMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
-
+  const [markOpen, setMarkOpen] = useState(false);
+  const [markGrid, setMarkGrid] = useState(null);
+  const [markAmount, setMarkAmount] = useState("2.20");
+  const [markDate, setMarkDate] = useState(new Date().toISOString().slice(0, 10));
+  const [marking, setMarking] = useState(false);
   const load = async () => {
     setLoading(true);
     try {
