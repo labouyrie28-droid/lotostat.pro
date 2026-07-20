@@ -1142,6 +1142,64 @@ async def list_grids(user: User = Depends(get_current_user)):
             g["result"] = None
     return grids
 
+@api_router.get("/grids/bilan")
+async def grids_bilan(user: User = Depends(get_current_user)):
+    """Bilan financier de toutes les grilles réellement jouées par l'utilisateur."""
+    grids = await db.saved_grids.find(
+        {"user_id": user.user_id, "is_played": True}, {"_id": 0}
+    ).sort("played_date", -1).to_list(1000)
+    all_draws = await _get_all_draws(user.user_id)
+
+    total_spent = 0.0
+    total_won = 0.0
+    detailed = []
+    for g in grids:
+        played_date = g.get("played_date") or g["created_at"][:10]
+        amount = g.get("amount_played", 0.0)
+        total_spent += amount
+
+        # Cherche le tirage correspondant à la date jouée (le tirage le plus proche >= played_date)
+        target_draw = None
+        for d in all_draws:
+            if d["date"] >= played_date:
+                target_draw = d
+                break
+
+        payout = 0.0
+        result_info = None
+        if target_draw:
+            actual_set = set(target_draw["numbers"])
+            main_matches = len(actual_set & set(g["numbers"]))
+            chance_match = target_draw["chance"] == g["chance"]
+            payout = _grid_payout(main_matches, chance_match)
+            result_info = {
+                "target_date": target_draw["date"],
+                "main_matches": main_matches,
+                "chance_match": chance_match,
+                "rank_label": _payout_rank(main_matches, chance_match),
+            }
+            total_won += payout
+
+        detailed.append({
+            "id": g["id"],
+            "numbers": g["numbers"],
+            "chance": g["chance"],
+            "strategy": g["strategy"],
+            "played_date": played_date,
+            "amount_played": amount,
+            "payout": payout,
+            "result": result_info,
+        })
+
+    net = total_won - total_spent
+    return {
+        "total_spent": round(total_spent, 2),
+        "total_won": round(total_won, 2),
+        "net": round(net, 2),
+        "grids_count": len(grids),
+        "grids": detailed,
+    }
+
 
 def _payout_rank(main_matches: int, chance_match: bool) -> str:
     """FDJ Loto rank label based on matches."""
