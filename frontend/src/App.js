@@ -14,6 +14,7 @@ import Stats from "@/pages/views/Stats";
 import HotCold from "@/pages/views/HotCold";
 import Generator from "@/pages/views/Generator";
 import MyGrids from "@/pages/views/MyGrids";
+import Bilan from "@/pages/views/Bilan";
 import DataImport from "@/pages/views/DataImport";
 import Backtest from "@/pages/views/Backtest";
 import Heatmap from "@/pages/views/Heatmap";
@@ -44,6 +45,7 @@ const AppRoutes = () => {
         <Route path="wheel" element={<Wheel />} />
         <Route path="compare" element={<Compare />} />
         <Route path="grids" element={<MyGrids />} />
+        <Route path="bilan" element={<Bilan />} />
         <Route path="alerts" element={<Alerts />} />
         <Route path="import" element={<DataImport />} />
       </Route>
