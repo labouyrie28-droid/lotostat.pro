@@ -163,6 +163,20 @@ const MyGrids = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {g.is_played ? (
+                      <span className="flex items-center gap-2 text-xs text-emerald-400 px-3 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                        <Euro className="w-3.5 h-3.5" /> Jouée · {g.amount_played?.toFixed(2)} €
+                      </span>
+                    ) : (
+                      <Button
+                        data-testid={`mark-played-${g.id}`}
+                        variant="ghost"
+                        onClick={() => openMark(g)}
+                        className="text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 gap-2"
+                      >
+                        <Wallet className="w-4 h-4" /> J'ai joué cette grille
+                      </Button>
+                    )}
                     <Button
                       data-testid={`share-grid-${g.id}`}
                       variant="ghost"
@@ -310,6 +324,60 @@ const MyGrids = () => {
               Note : sans domaine vérifié sur resend.com, les emails ne partent qu'à l'adresse du compte Resend.
             </p>
           </div>
+        </DialogContent>
+     </Dialog>
+
+      {/* Mark as played dialog */}
+      <Dialog open={markOpen} onOpenChange={setMarkOpen}>
+        <DialogContent className="bg-[#0d0d10] border-white/10 text-white" data-testid="mark-played-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl">Marquer comme jouée</DialogTitle>
+            <DialogDescription className="text-zinc-500">
+              Renseigne le montant misé pour suivre ton bilan.
+            </DialogDescription>
+          </DialogHeader>
+
+          {markGrid && (
+            <div className="flex flex-wrap items-center gap-2 pb-4 border-b border-white/5">
+              {markGrid.numbers.map((n) => <LotteryBall key={n} number={n} size="sm" />)}
+              <div className="mx-1 text-zinc-700">+</div>
+              <LotteryBall number={markGrid.chance} variant="chance" size="sm" />
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Montant misé (€)</div>
+            <Input
+              data-testid="mark-amount-input"
+              type="number"
+              step="0.10"
+              min="0"
+              value={markAmount}
+              onChange={(e) => setMarkAmount(e.target.value)}
+              className="bg-black/30 border-white/10"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Date de jeu</div>
+            <Input
+              data-testid="mark-date-input"
+              type="date"
+              value={markDate}
+              onChange={(e) => setMarkDate(e.target.value)}
+              className="bg-black/30 border-white/10"
+            />
+          </div>
+
+          <Button
+            data-testid="submit-mark-played-btn"
+            onClick={submitMark}
+            disabled={marking}
+            className="w-full rounded-full bg-emerald-400 hover:bg-emerald-300 text-black font-semibold gap-2"
+          >
+            {marking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Euro className="w-4 h-4" />}
+            Confirmer
+          </Button>
         </DialogContent>
       </Dialog>
     </div>
