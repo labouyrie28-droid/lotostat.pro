@@ -19,6 +19,7 @@ const navItems = [
   { to: "/dashboard/backtest", icon: TrendingUp, label: "Backtest" },
   { to: "/dashboard/verify", icon: Search, label: "Vérif grille" },
   { to: "/dashboard/compare", icon: GitCompareArrows, label: "Comparer" },
+  { to: "/dashboard/bilan", icon: Wallet, label: "Mon bilan" },
   { to: "/dashboard/grids", icon: Bookmark, label: "Mes grilles" },
   { to: "/dashboard/alerts", icon: Bell, label: "Alertes email" },
   { to: "/dashboard/import", icon: Upload, label: "Données" },
