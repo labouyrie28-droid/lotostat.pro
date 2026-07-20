@@ -55,6 +55,35 @@ const MyGrids = () => {
       await load();
     } catch { toast.error("Impossible de supprimer"); }
   };
+  const openMark = (g) => {
+    setMarkGrid(g);
+    setMarkAmount("2.20");
+    setMarkDate(new Date().toISOString().slice(0, 10));
+    setMarkOpen(true);
+  };
+
+  const submitMark = async () => {
+    if (!markGrid) return;
+    const amount = parseFloat(markAmount);
+    if (isNaN(amount) || amount < 0) {
+      toast.error("Montant invalide");
+      return;
+    }
+    setMarking(true);
+    try {
+      await api.post(`/grids/${markGrid.id}/mark-played`, {
+        amount_played: amount,
+        played_date: markDate,
+      });
+      toast.success("Grille marquée comme jouée");
+      setMarkOpen(false);
+      await load();
+    } catch {
+      toast.error("Impossible de marquer la grille");
+    } finally {
+      setMarking(false);
+    }
+  };
 
   const openShare = async (g) => {
     setShareGrid(g);
