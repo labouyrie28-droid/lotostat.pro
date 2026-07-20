@@ -53,6 +53,9 @@ class SavedGrid(BaseModel):
     numbers: List[int]
     chance: int
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    is_played: bool = False
+    amount_played: float = 0.0
+    played_date: Optional[str] = None  # YYYY-MM-DD, date où la grille a été jouée
 
 
 class GenerateGridRequest(BaseModel):
