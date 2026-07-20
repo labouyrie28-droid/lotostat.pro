@@ -1055,6 +1055,57 @@ async def save_grid(payload: SaveGridRequest, user: User = Depends(get_current_u
     return doc
 
 
+
+class MarkPlayedRequest(BaseModel):
+    amount_played: float
+    played_date: Optional[str] = None  # défaut = aujourd'hui
+
+
+@api_router.post("/grids/{grid_id}/mark-played")
+async def mark_played(grid_id: str, payload: MarkPlayedRequest, user: User = Depends(get_current_user)):
+    """Marque une grille sauvegardée comme réellement jouée, avec le montant misé."""
+    if payload.amount_played < 0:
+        raise HTTPException(400, "Le montant doit être positif")
+    played_date = payload.played_date or datetime.now(timezone.utc).date().isoformat()
+    result = await db.saved_grids.update_one(
+        {"id": grid_id, "user_id": user.user_id},
+        {"$set": {"is_played": True, "amount_played": payload.amount_played, "played_date": played_date}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Grille introuvable")
+    return {"ok": True}
+
+
+class ManualGridRequest(BaseModel):
+    numbers: List[int]
+    chance: int
+    amount_played: float
+    played_date: Optional[str] = None
+
+
+@api_router.post("/grids/manual")
+async def add_manual_grid(payload: ManualGridRequest, user: User = Depends(get_current_user)):
+    """Ajoute une grille jouée manuellement (pas générée par l'outil)."""
+    if not _valid_draw(payload.numbers, payload.chance):
+        raise HTTPException(status_code=400, detail="Grille invalide")
+    if payload.amount_played < 0:
+        raise HTTPException(400, "Le montant doit être positif")
+    played_date = payload.played_date or datetime.now(timezone.utc).date().isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user.user_id,
+        "strategy": "manuel",
+        "numbers": sorted(payload.numbers),
+        "chance": payload.chance,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "is_played": True,
+        "amount_played": payload.amount_played,
+        "played_date": played_date,
+    }
+    await db.saved_grids.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+    
 @api_router.get("/grids")
 async def list_grids(user: User = Depends(get_current_user)):
     cursor = db.saved_grids.find({"user_id": user.user_id}, {"_id": 0}).sort("created_at", -1).limit(200)
