@@ -310,8 +310,16 @@ async def _load_official_for_user(user_id: str) -> dict:
 async def _fetch_latest_official_rows() -> List[dict]:
     """Télécharge l'historique officiel FDJ (mis à jour après chaque tirage)
     et retourne les tirages sous forme de liste triée par date croissante."""
+    browser_headers = {
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    }
     async with httpx.AsyncClient(timeout=30) as http:
-        r = await http.get( f"https://media.fdj.fr/static-draws/csv/loto/loto_201911.zip?t={int(datetime.now(timezone.utc).timestamp())}", headers={"Cache-Control": "no-cache"}, )
+        r = await http.get(
+            f"https://media.fdj.fr/static-draws/csv/loto/loto_201911.zip?t={int(datetime.now(timezone.utc).timestamp())}",
+            headers=browser_headers,
+        )
         r.raise_for_status()
         content_bytes = r.content
 
