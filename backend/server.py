@@ -315,6 +315,40 @@ async def _fetch_latest_official_rows() -> List[dict]:
         "Pragma": "no-cache",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     }
+    url = "https://www.sto.api.fdj.fr/anonymous/service-draw-info/v3/documentations/1a2b3c4d-9876-4562-b3fc-2c963f66afp6"
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http:
+        r = await http.get(url, headers=browser_headers)
+        r.raise_for_status()
+        content_bytes = r.content
+
+    with zipfile.ZipFile(io.BytesIO(content_bytes)) as zf:
+        csv_name = next(n for n in zf.namelist() if n.lower().endswith(".csv"))
+        raw = zf.read(csv_name)
+
+    content = None
+    for enc in ("utf-8", "latin-1", "cp1252"):
+        try:
+            content = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    if content is None:
+        return []
+
+    reader = csv.DictReader(io.StringIO(content), delimiter=";")
+    rows = []
+    for row in reader:
+        try:
+            date_iso = datetime.strptime(row["date_de_tirage"].strip(), "%d/%m/%Y").strftime("%Y-%m-%d")
+            nums = sorted([int(row[f"boule_{i}"]) for i in range(1, 6)])
+            chance = int(row["numero_chance"])
+            if not _valid_draw(nums, chance):
+                continue
+            rows.append({"date": date_iso, "numbers": nums, "chance": chance})
+        except Exception:
+            continue
+    rows.sort(key=lambda d: d["date"])
+    return rows
     async with httpx.AsyncClient(timeout=30) as http:
         r = await http.get(
             f"https://media.fdj.fr/static-draws/csv/loto/loto_201911.zip?t={int(datetime.now(timezone.utc).timestamp())}",
